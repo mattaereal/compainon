@@ -17,9 +17,9 @@ from ..config import DisplayConfig
 logger = logging.getLogger(__name__)
 
 _STATUS_ICONS = {
-    "OK": "[OK]",
+    "OK": "[+]",
     "DEGRADED": "[!]",
-    "DOWN": "[X]",
+    "DOWN": "[-]",
     "UNKNOWN": "[?]",
 }
 

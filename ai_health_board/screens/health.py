@@ -16,9 +16,9 @@ from ..cache import load_cache, save_cache
 logger = logging.getLogger(__name__)
 
 _STATUS_ICONS = {
-    "OK": "[OK]",
+    "OK": "[+]",
     "DEGRADED": "[!]",
-    "DOWN": "[X]",
+    "DOWN": "[-]",
     "UNKNOWN": "[?]",
 }
 

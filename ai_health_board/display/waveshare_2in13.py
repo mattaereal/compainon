@@ -22,9 +22,9 @@ except Exception:
     epd2in13_V3 = None
 
 _STATUS_ICONS = {
-    "OK": "[OK]",
+    "OK": "[+]",
     "DEGRADED": "[!]",
-    "DOWN": "[X]",
+    "DOWN": "[-]",
     "UNKNOWN": "[?]",
 }
 

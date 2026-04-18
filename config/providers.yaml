@@ -28,6 +28,7 @@ screens:
     display_duration: 15
     options:
       url: https://lotus.therektgames.com/health
+      stats_url: https://lotus.therektgames.com/stats
 
 # List of status providers to poll (used by the health screen)
 providers:

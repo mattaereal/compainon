@@ -9,8 +9,6 @@ from typing import Any, Dict, List, Optional
 
 
 class ServiceStatus(str, Enum):
-    """Normalized service status."""
-
     OK = "OK"
     DEGRADED = "DEGRADED"
     DOWN = "DOWN"
@@ -18,9 +16,9 @@ class ServiceStatus(str, Enum):
 
     def icon(self) -> str:
         mapping = {
-            self.OK: "[OK]",
+            self.OK: "[+]",
             self.DEGRADED: "[!]",
-            self.DOWN: "[X]",
+            self.DOWN: "[-]",
             self.UNKNOWN: "[?]",
         }
         return mapping.get(self, "[?]")
@@ -28,8 +26,6 @@ class ServiceStatus(str, Enum):
 
 @dataclass
 class ComponentStatus:
-    """Status of a single component."""
-
     name: str
     status: ServiceStatus
     upstream_status: Optional[Any] = None
@@ -47,8 +43,6 @@ class ComponentStatus:
 
 @dataclass
 class ProviderStatus:
-    """Status of a provider and all of its components."""
-
     name: str
     provider_type: str
     status: ServiceStatus = ServiceStatus.UNKNOWN
@@ -74,8 +68,6 @@ class ProviderStatus:
 
 @dataclass
 class LotusHealthStatus:
-    """Status from the Lotus health endpoint."""
-
     status: str = "unknown"
     proxy: bool = False
     pending: int = 0
@@ -102,9 +94,61 @@ class LotusHealthStatus:
 
 
 @dataclass
-class AppState:
-    """Application state cache."""
+class LotusStatsData:
+    prs_created: int = 0
+    prs_merged: int = 0
+    issues_created: int = 0
+    comments_resolved: int = 0
+    commits_today: int = 0
+    lines_changed: int = 0
+    uptime_seconds: int = 0
+    last_action: str = ""
+    last_action_time: Optional[datetime] = None
 
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "prs_created": self.prs_created,
+            "prs_merged": self.prs_merged,
+            "issues_created": self.issues_created,
+            "comments_resolved": self.comments_resolved,
+            "commits_today": self.commits_today,
+            "lines_changed": self.lines_changed,
+            "uptime_seconds": self.uptime_seconds,
+            "last_action": self.last_action,
+            "last_action_time": (
+                self.last_action_time.isoformat() if self.last_action_time else None
+            ),
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "LotusStatsData":
+        raw_time = data.get("last_action_time")
+        last_action_time = None
+        if raw_time:
+            if isinstance(raw_time, str):
+                try:
+                    last_action_time = datetime.fromisoformat(
+                        raw_time.replace("Z", "+00:00")
+                    )
+                except (ValueError, TypeError):
+                    pass
+            elif isinstance(raw_time, datetime):
+                last_action_time = raw_time
+        return cls(
+            prs_created=data.get("prs_created", 0),
+            prs_merged=data.get("prs_merged", 0),
+            issues_created=data.get("issues_created", 0),
+            comments_resolved=data.get("comments_resolved", 0),
+            commits_today=data.get("commits_today", 0),
+            lines_changed=data.get("lines_changed", 0),
+            uptime_seconds=data.get("uptime_seconds", 0),
+            last_action=data.get("last_action", ""),
+            last_action_time=last_action_time,
+        )
+
+
+@dataclass
+class AppState:
     last_refresh: Optional[datetime] = None
     providers: List[ProviderStatus] = field(default_factory=list)
     stale: bool = False

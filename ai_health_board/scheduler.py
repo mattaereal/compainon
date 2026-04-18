@@ -19,7 +19,7 @@ async def screen_loop(
 
     For each screen:
     1. If poll_interval has elapsed, fetch new data
-    2. If data has changed, render and push to display
+    2. Always render when switching screens; skip only if same screen and no change
     3. Sleep for display_duration
     4. Move to next screen
     """
@@ -45,11 +45,11 @@ async def screen_loop(
                             f"Fetch failed for screen {screen.__class__.__name__}: {e}"
                         )
 
-                if screen.has_changed():
+                switching = i != prev_screen_idx
+                if switching or screen.has_changed():
                     try:
                         img = screen.render(display.width, display.height)
-                        full_refresh = i != prev_screen_idx
-                        display.render_image(img, full_refresh=full_refresh)
+                        display.render_image(img, full_refresh=switching)
                         prev_screen_idx = i
                         logger.debug(f"Rendered screen {screen.__class__.__name__}")
                     except Exception as e:

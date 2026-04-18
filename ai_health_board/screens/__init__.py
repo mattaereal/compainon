@@ -30,11 +30,13 @@ def create_screens(config: AppConfig) -> List[Screen]:
             url = sc.options.get("url", "")
             if not url:
                 raise ValueError("Tamagotchi screen requires 'url' in options")
+            stats_url = sc.options.get("stats_url", "")
             screens.append(
                 TamagotchiScreen(
                     url=url,
                     poll_interval=sc.poll_interval,
                     display_duration=sc.display_duration,
+                    stats_url=stats_url,
                 )
             )
         else:
