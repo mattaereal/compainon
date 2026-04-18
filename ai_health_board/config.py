@@ -21,20 +21,66 @@ class DisplayConfig:
 
 @dataclass
 class ProviderConfig:
+    """Internal provider config used to instantiate providers from category data."""
+
     name: str
     type: str
     url: str
-    components: List[str]
-    display_names: Dict[str, str] = field(default_factory=dict)
+    components: List[str] = field(default_factory=list)
+
+
+@dataclass
+class StatusBoardItem:
+    key: str
+    label: str
+
+
+@dataclass
+class StatusBoardCategory:
+    name: str
+    url: str
+    type: str
+    icon: str = "generic"
+    items: List[StatusBoardItem] = field(default_factory=list)
+
+
+@dataclass
+class MoodMapConfig:
+    field: str = "status"
+    ok: str = "idle"
+    ok_busy: str = "working"
+    error: str = "error"
+
+
+@dataclass
+class InfoLineConfig:
+    label: str
+    source_field: str = ""
+    template: str = ""
+    field_keys: List[str] = field(default_factory=list)
+    max_length: int = 20
+
+
+@dataclass
+class SpriteConfig:
+    idle: str = ""
+    working: str = ""
+    error: str = ""
+    success: str = ""
 
 
 @dataclass
 class ScreenConfig:
     name: str
-    type: str
+    template: str
     poll_interval: int = 30
     display_duration: int = 30
-    options: Dict[str, Any] = field(default_factory=dict)
+    categories: List[StatusBoardCategory] = field(default_factory=list)
+    url: str = ""
+    stats_url: str = ""
+    sprites: Optional[SpriteConfig] = None
+    mood_map: Optional[MoodMapConfig] = None
+    info_lines: List[InfoLineConfig] = field(default_factory=list)
 
 
 @dataclass
@@ -42,12 +88,10 @@ class AppConfig:
     refresh_seconds: int = 300
     timezone: str = "UTC"
     display: DisplayConfig = field(default_factory=lambda: DisplayConfig("mock"))
-    providers: List[ProviderConfig] = field(default_factory=list)
     screens: List[ScreenConfig] = field(default_factory=list)
 
     @staticmethod
     def from_dict(data: Dict[str, Any]) -> "AppConfig":
-        """Load AppConfig from a dictionary (typically YAML)."""
         display_raw = data.get("display", {})
         display = DisplayConfig(
             backend=display_raw.get("backend", "mock"),
@@ -59,27 +103,75 @@ class AppConfig:
             ),
         )
 
-        providers: List[ProviderConfig] = []
-        for p_raw in data.get("providers", []):
-            providers.append(
-                ProviderConfig(
-                    name=p_raw["name"],
-                    type=p_raw["type"],
-                    url=p_raw["url"],
-                    components=p_raw.get("components", []),
-                    display_names=p_raw.get("display_names", {}),
-                )
-            )
-
         screens: List[ScreenConfig] = []
         for s_raw in data.get("screens", []):
+            categories: List[StatusBoardCategory] = []
+            for cat_raw in s_raw.get("categories", []):
+                items: List[StatusBoardItem] = []
+                for item_raw in cat_raw.get("items", []):
+                    if isinstance(item_raw, dict):
+                        items.append(
+                            StatusBoardItem(
+                                key=item_raw.get("key", ""),
+                                label=item_raw.get("label", item_raw.get("key", "")),
+                            )
+                        )
+                    elif isinstance(item_raw, str):
+                        items.append(StatusBoardItem(key=item_raw, label=item_raw))
+                categories.append(
+                    StatusBoardCategory(
+                        name=cat_raw.get("name", ""),
+                        url=cat_raw.get("url", ""),
+                        type=cat_raw.get("type", "statuspage"),
+                        icon=cat_raw.get("icon", "generic"),
+                        items=items,
+                    )
+                )
+
+            sprites = None
+            sprites_raw = s_raw.get("sprites")
+            if sprites_raw and isinstance(sprites_raw, dict):
+                sprites = SpriteConfig(
+                    idle=sprites_raw.get("idle", ""),
+                    working=sprites_raw.get("working", ""),
+                    error=sprites_raw.get("error", ""),
+                    success=sprites_raw.get("success", ""),
+                )
+
+            mood_map = None
+            mood_raw = s_raw.get("mood_map")
+            if mood_raw and isinstance(mood_raw, dict):
+                mood_map = MoodMapConfig(
+                    field=mood_raw.get("field", "status"),
+                    ok=mood_raw.get("ok", "idle"),
+                    ok_busy=mood_raw.get("ok_busy", "working"),
+                    error=mood_raw.get("error", "error"),
+                )
+
+            info_lines: List[InfoLineConfig] = []
+            for il_raw in s_raw.get("info_lines", []):
+                info_lines.append(
+                    InfoLineConfig(
+                        label=il_raw.get("label", ""),
+                        source_field=il_raw.get("field", ""),
+                        template=il_raw.get("template", ""),
+                        field_keys=il_raw.get("fields", []),
+                        max_length=il_raw.get("max_length", 20),
+                    )
+                )
+
             screens.append(
                 ScreenConfig(
-                    name=s_raw["name"],
-                    type=s_raw["type"],
+                    name=s_raw.get("name", ""),
+                    template=s_raw.get("template", "status_board"),
                     poll_interval=s_raw.get("poll_interval", 30),
                     display_duration=s_raw.get("display_duration", 30),
-                    options=s_raw.get("options", {}),
+                    categories=categories,
+                    url=s_raw.get("url", ""),
+                    stats_url=s_raw.get("stats_url", ""),
+                    sprites=sprites,
+                    mood_map=mood_map,
+                    info_lines=info_lines,
                 )
             )
 
@@ -87,13 +179,11 @@ class AppConfig:
             refresh_seconds=data.get("refresh_seconds", 300),
             timezone=data.get("timezone", "UTC"),
             display=display,
-            providers=providers,
             screens=screens,
         )
 
 
 def load_config(path: str) -> AppConfig:
-    """Load and validate configuration from a YAML file."""
     if not os.path.exists(path):
         raise FileNotFoundError(f"Config file not found: {path}")
 
@@ -107,17 +197,8 @@ def load_config(path: str) -> AppConfig:
 
     if config.refresh_seconds <= 0:
         raise ValueError("refresh_seconds must be positive")
-    if not config.providers:
-        logger.warning("No providers configured -- app will run but show no status.")
-    for p in config.providers:
-        if not p.name or not p.type or not p.url:
-            raise ValueError(
-                f"Provider {p.name} missing required fields (name/type/url)"
-            )
-        if not p.components:
-            logger.warning(f"Provider '{p.name}' has no components configured")
+    if not config.screens:
+        logger.warning("No screens configured -- app will run but show nothing.")
 
-    logger.info(
-        f"Loaded config with {len(config.providers)} provider(s), {len(config.screens)} screen(s)"
-    )
+    logger.info(f"Loaded config with {len(config.screens)} screen(s)")
     return config

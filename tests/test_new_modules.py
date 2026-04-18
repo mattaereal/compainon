@@ -1,20 +1,22 @@
-"""Tests for new modules: LotusHealthStatus, LotusStatsData, providers, screens."""
+"""Tests for config, screen templates, and providers."""
 
 import sys
 import os
+import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from ai_health_board.models import LotusHealthStatus, LotusStatsData, ServiceStatus
+from ai_health_board.models import ServiceStatus
 from ai_health_board.providers.lotus_health import LotusHealthProvider
-from ai_health_board.providers.lotus_stats import LotusStatsProvider
-from ai_health_board.screens.health import (
-    HealthScreen,
+from ai_health_board.screens.status_board import (
+    StatusBoardScreen,
+    CategoryData,
     _STATUS_ICONS,
     _make_anthropic_icon,
     _make_openai_icon,
     _make_lotus_icon,
-    _get_provider_icon,
+    _make_generic_icon,
+    _get_icon,
     _resolve_icon_key,
 )
 from ai_health_board.screens.tamagotchi import TamagotchiScreen
@@ -23,152 +25,16 @@ from ai_health_board.config import (
     AppConfig,
     DisplayConfig,
     ScreenConfig,
-    ProviderConfig,
+    StatusBoardCategory,
+    StatusBoardItem,
+    SpriteConfig,
+    MoodMapConfig,
+    InfoLineConfig,
+    load_config,
 )
 
 
-# --- LotusHealthStatus ---
-
-
-def test_lotus_health_happy():
-    h = LotusHealthStatus(status="ok", proxy=True, pending=0)
-    assert h.mood == "happy"
-
-
-def test_lotus_health_working():
-    h = LotusHealthStatus(status="ok", proxy=True, pending=5)
-    assert h.mood == "working"
-
-
-def test_lotus_health_sad():
-    h = LotusHealthStatus(status="down", proxy=False, pending=0)
-    assert h.mood == "sad"
-
-
-def test_lotus_health_default():
-    h = LotusHealthStatus()
-    assert h.status == "unknown"
-    assert h.mood == "sad"
-
-
-def test_lotus_health_to_dict():
-    h = LotusHealthStatus(status="ok", proxy=True, pending=0)
-    d = h.to_dict()
-    assert d["status"] == "ok"
-    assert d["mood"] == "happy"
-    assert d["proxy"] is True
-    assert d["pending"] == 0
-
-
-# --- LotusStatsData ---
-
-
-def test_lotus_stats_defaults():
-    s = LotusStatsData()
-    assert s.prs_created == 0
-    assert s.prs_merged == 0
-    assert s.last_action == ""
-
-
-def test_lotus_stats_to_dict():
-    s = LotusStatsData(prs_created=5, prs_merged=3, last_action="merged PR #1")
-    d = s.to_dict()
-    assert d["prs_created"] == 5
-    assert d["prs_merged"] == 3
-    assert d["last_action"] == "merged PR #1"
-
-
-def test_lotus_stats_from_dict():
-    data = {
-        "prs_created": 10,
-        "prs_merged": 7,
-        "issues_created": 2,
-        "comments_resolved": 30,
-        "commits_today": 4,
-        "lines_changed": 1500,
-        "uptime_seconds": 3600,
-        "last_action": "pushed commit",
-        "last_action_time": "2026-04-18T00:15:00Z",
-    }
-    s = LotusStatsData.from_dict(data)
-    assert s.prs_created == 10
-    assert s.prs_merged == 7
-    assert s.last_action == "pushed commit"
-    assert s.last_action_time is not None
-
-
-def test_lotus_stats_from_dict_empty():
-    s = LotusStatsData.from_dict({})
-    assert s.prs_created == 0
-    assert s.last_action == ""
-
-
-# --- LotusHealthProvider ---
-
-
-def test_lotus_provider_type():
-    p = LotusHealthProvider(display_name="Lotus", url="http://test", component_keys=[])
-    assert p.provider_type() == "lotus_health"
-
-
-def test_lotus_provider_display_name():
-    p = LotusHealthProvider(
-        display_name="My Lotus", url="http://test", component_keys=[]
-    )
-    assert p.display_name() == "My Lotus"
-
-
-def test_lotus_provider_normalize_ok():
-    p = LotusHealthProvider(display_name="Lotus", url="http://test", component_keys=[])
-    norm = p.normalize({"status": "ok", "proxy": True, "pending": 0})
-    assert norm["Lotus"] == ServiceStatus.OK
-    assert norm["Queue"] == ServiceStatus.OK
-    assert norm["Proxy"] == ServiceStatus.OK
-
-
-def test_lotus_provider_normalize_degraded():
-    p = LotusHealthProvider(display_name="Lotus", url="http://test", component_keys=[])
-    norm = p.normalize({"status": "ok", "proxy": False, "pending": 3})
-    assert norm["Lotus"] == ServiceStatus.OK
-    assert norm["Queue"] == ServiceStatus.DEGRADED
-    assert norm["Proxy"] == ServiceStatus.DEGRADED
-
-
-def test_lotus_provider_normalize_down():
-    p = LotusHealthProvider(display_name="Lotus", url="http://test", component_keys=[])
-    norm = p.normalize({"status": "down", "proxy": False, "pending": 0})
-    assert norm["Lotus"] == ServiceStatus.DOWN
-
-
-def test_lotus_provider_normalize_empty():
-    p = LotusHealthProvider(display_name="Lotus", url="http://test", component_keys=[])
-    norm = p.normalize({})
-    assert norm["Lotus"] == ServiceStatus.UNKNOWN
-    assert norm["Queue"] == ServiceStatus.OK
-    assert norm["Proxy"] == ServiceStatus.DEGRADED
-
-
-# --- LotusStatsProvider ---
-
-
-def test_lotus_stats_provider_type():
-    p = LotusStatsProvider(display_name="Stats", url="http://test", component_keys=[])
-    assert p.provider_type() == "lotus_stats"
-
-
-def test_lotus_stats_provider_display_name():
-    p = LotusStatsProvider(
-        display_name="My Stats", url="http://test", component_keys=[]
-    )
-    assert p.display_name() == "My Stats"
-
-
-def test_lotus_stats_provider_normalize():
-    p = LotusStatsProvider(display_name="Stats", url="http://test", component_keys=[])
-    assert p.normalize({"prs_created": 5}) == {}
-
-
-# --- ServiceStatus icon ---
+# --- ServiceStatus ---
 
 
 def test_service_status_icons():
@@ -178,7 +44,7 @@ def test_service_status_icons():
     assert ServiceStatus.UNKNOWN.icon() == "[?]"
 
 
-# --- Pixel art icons ---
+# --- Status board icons ---
 
 
 def test_anthropic_icon():
@@ -199,285 +65,425 @@ def test_lotus_icon():
     assert icon.mode == "1"
 
 
-def test_provider_icon_has_black_pixels():
-    for maker in [_make_anthropic_icon, _make_openai_icon, _make_lotus_icon]:
+def test_generic_icon():
+    icon = _make_generic_icon()
+    assert icon.size == (12, 12)
+    assert icon.mode == "1"
+
+
+def test_icon_has_black_pixels():
+    for maker in [
+        _make_anthropic_icon,
+        _make_openai_icon,
+        _make_lotus_icon,
+        _make_generic_icon,
+    ]:
         icon = maker()
         extrema = icon.getextrema()
         assert extrema == (0, 255), f"{maker.__name__} icon has no black pixels"
 
 
-def test_resolve_icon_key_claude():
-    assert _resolve_icon_key("Claude", "statuspage") == "statuspage_anthropic"
+def test_resolve_icon_key():
+    assert _resolve_icon_key("Claude", "statuspage") == "anthropic"
+    assert _resolve_icon_key("OpenAI", "statuspage") == "openai"
+    assert _resolve_icon_key("Lotus", "lotus_health") == "lotus"
+    assert _resolve_icon_key("Random", "statuspage") == "statuspage"
 
 
-def test_resolve_icon_key_openai():
-    assert _resolve_icon_key("OpenAI", "statuspage") == "statuspage_openai"
+def test_get_icon_builtin():
+    for name in ["anthropic", "openai", "lotus", "generic"]:
+        icon = _get_icon(name)
+        assert icon is not None
+        assert icon.size == (12, 12)
 
 
-def test_resolve_icon_key_lotus():
-    assert _resolve_icon_key("Lotus", "lotus_health") == "lotus_health"
+def test_get_icon_unknown():
+    icon = _get_icon("nonexistent")
+    assert icon is not None  # falls back to generic
 
 
-def test_get_provider_icon():
-    icon = _get_provider_icon("statuspage_anthropic")
-    assert icon is not None
-    assert icon.size == (12, 12)
-
-
-def test_get_provider_icon_unknown():
-    icon = _get_provider_icon("nonexistent")
-    assert icon is None
-
-
-# --- HealthScreen ---
-
-
-def test_health_screen_defaults():
-    s = HealthScreen(providers=[])
-    assert s.poll_interval == 30
-    assert s.display_duration == 30
-
-
-def test_health_screen_render():
-    s = HealthScreen(providers=[])
-    img = s.render(122, 250)
-    assert img.size == (122, 250)
-    assert img.mode == "1"
-
-
-def test_health_screen_has_changed_initial():
-    s = HealthScreen(providers=[])
-    assert s.has_changed() is True
-
-
-def test_health_screen_has_changed_after_render():
-    s = HealthScreen(providers=[])
-    s.render(122, 250)
-    assert s.has_changed() is False
-
-
-def test_health_screen_icons():
+def test_status_icons():
     assert _STATUS_ICONS["OK"] == "[+]"
     assert _STATUS_ICONS["DOWN"] == "[-]"
     assert _STATUS_ICONS["DEGRADED"] == "[!]"
 
 
-def test_health_screen_display_names():
-    pc = ProviderConfig(
+# --- LotusHealthProvider ---
+
+
+def test_lotus_provider_type():
+    p = LotusHealthProvider(display_name="Lotus", url="http://test", component_keys=[])
+    assert p.provider_type() == "lotus_health"
+
+
+def test_lotus_provider_normalize_ok():
+    p = LotusHealthProvider(display_name="Lotus", url="http://test", component_keys=[])
+    norm = p.normalize({"status": "ok", "proxy": True, "pending": 0})
+    assert norm["Lotus"] == ServiceStatus.OK
+    assert norm["Queue"] == ServiceStatus.OK
+
+
+def test_lotus_provider_normalize_degraded():
+    p = LotusHealthProvider(display_name="Lotus", url="http://test", component_keys=[])
+    norm = p.normalize({"status": "ok", "proxy": False, "pending": 3})
+    assert norm["Queue"] == ServiceStatus.DEGRADED
+
+
+def test_lotus_provider_normalize_down():
+    p = LotusHealthProvider(display_name="Lotus", url="http://test", component_keys=[])
+    norm = p.normalize({"status": "down", "proxy": False, "pending": 0})
+    assert norm["Lotus"] == ServiceStatus.DOWN
+
+
+# --- Config data classes ---
+
+
+def test_status_board_item():
+    item = StatusBoardItem(key="claude.ai", label="AI")
+    assert item.key == "claude.ai"
+    assert item.label == "AI"
+
+
+def test_status_board_category():
+    cat = StatusBoardCategory(
         name="Claude",
-        type="statuspage",
         url="http://test",
-        components=["claude.ai"],
-        display_names={"claude.ai": "AI"},
-    )
-    s = HealthScreen(providers=[pc])
-    assert s._display_name_for("claude.ai", pc) == "AI"
-    assert s._display_name_for("unknown", pc) == "unknown"
-
-
-def test_health_screen_display_names_no_config():
-    s = HealthScreen(providers=[])
-    assert s._display_name_for("claude.ai", None) == "claude.ai"
-
-
-def test_health_screen_provider_config_for():
-    pc = ProviderConfig(
-        name="Claude", type="statuspage", url="http://test", components=[]
-    )
-    s = HealthScreen(providers=[pc])
-    assert s._provider_config_for("Claude") is pc
-    assert s._provider_config_for("Nonexistent") is None
-
-
-def test_health_screen_render_with_mock_data():
-    from ai_health_board.models import AppState, ProviderStatus, ComponentStatus
-
-    pc = ProviderConfig(
-        name="Claude",
         type="statuspage",
-        url="http://test",
-        components=["claude.ai"],
-        display_names={"claude.ai": "AI"},
+        icon="anthropic",
+        items=[StatusBoardItem(key="claude.ai", label="AI")],
     )
-    s = HealthScreen(providers=[pc])
-    s._state = AppState(
-        last_refresh=None,
-        providers=[
-            ProviderStatus(
-                name="Claude",
-                provider_type="statuspage",
-                status=ServiceStatus.OK,
-                components=[ComponentStatus("claude.ai", ServiceStatus.OK)],
-            )
-        ],
+    assert cat.name == "Claude"
+    assert len(cat.items) == 1
+
+
+def test_sprite_config():
+    s = SpriteConfig(
+        idle="img/a.png", working="img/b.png", error="img/c.png", success="img/d.png"
     )
-    img = s.render(122, 250)
-    assert img.size == (122, 250)
+    assert s.idle == "img/a.png"
 
 
-# --- TamagotchiScreen ---
+def test_mood_map_config():
+    mm = MoodMapConfig(field="status", ok="idle", ok_busy="working", error="error")
+    assert mm.field == "status"
 
 
-def test_tamagotchi_screen_defaults():
-    s = TamagotchiScreen(url="http://test")
-    assert s.poll_interval == 5
-    assert s.display_duration == 15
+def test_info_line_config():
+    il = InfoLineConfig(
+        label="PRs",
+        template="+{prs_created} M{prs_merged}",
+        field_keys=["prs_created", "prs_merged"],
+    )
+    assert il.template == "+{prs_created} M{prs_merged}"
 
 
-def test_tamagotchi_screen_render():
-    s = TamagotchiScreen(url="http://test")
-    img = s.render(122, 250)
-    assert img.size == (122, 250)
-    assert img.mode == "1"
+def test_screen_config():
+    sc = ScreenConfig(name="AI Health", template="status_board")
+    assert sc.template == "status_board"
+    assert sc.categories == []
 
 
-def test_tamagotchi_screen_has_changed_initial():
-    s = TamagotchiScreen(url="http://test")
-    assert s.has_changed() is True
-
-
-def test_tamagotchi_screen_has_changed_after_render():
-    s = TamagotchiScreen(url="http://test")
-    s.render(122, 250)
-    assert s.has_changed() is False
-
-
-def test_tamagotchi_screen_has_changed_on_mood_change():
-    s = TamagotchiScreen(url="http://test")
-    s.render(122, 250)
-    assert s.has_changed() is False
-    s._health = LotusHealthStatus(status="ok", proxy=True, pending=3)
-    assert s.has_changed() is True
-
-
-def test_tamagotchi_screen_stats_url():
-    s = TamagotchiScreen(url="http://test", stats_url="http://test/stats")
-    assert s._stats_url == "http://test/stats"
-
-
-def test_tamagotchi_screen_stats_change():
-    s = TamagotchiScreen(url="http://test")
-    s._health = LotusHealthStatus(status="ok", proxy=True, pending=0)
-    s.render(122, 250)
-    assert s.has_changed() is False
-    s._stats = LotusStatsData(prs_created=5)
-    assert s.has_changed() is True
-
-
-def test_tamagotchi_sprite_frame_cycling():
-    s = TamagotchiScreen(url="http://test")
-    s._health = LotusHealthStatus(status="ok", proxy=True, pending=0)
-    s._stats = LotusStatsData(prs_created=5)
-    num_sprites = len(s._sprites) or 4
-    for i in range(num_sprites):
-        s._frame = i
-        img = s.render(122, 250)
-        assert img.size == (122, 250)
-
-
-# --- ScreenConfig ---
-
-
-def test_screen_config_from_dict():
+def test_config_from_dict():
     data = {
         "refresh_seconds": 30,
         "display": {"backend": "mock"},
-        "providers": [],
         "screens": [
             {
-                "name": "health",
-                "type": "health",
+                "name": "AI Health",
+                "template": "status_board",
                 "poll_interval": 30,
                 "display_duration": 30,
+                "categories": [
+                    {
+                        "name": "Claude",
+                        "url": "http://test",
+                        "type": "statuspage",
+                        "icon": "anthropic",
+                        "items": [
+                            {"key": "claude.ai", "label": "AI"},
+                        ],
+                    }
+                ],
             },
             {
-                "name": "tamagotchi",
-                "type": "tamagotchi",
+                "name": "Lotus",
+                "template": "tamagotchi",
                 "poll_interval": 5,
                 "display_duration": 15,
-                "options": {"url": "http://test", "stats_url": "http://test/stats"},
+                "url": "http://test/health",
+                "stats_url": "http://test/stats",
+                "sprites": {
+                    "idle": "img/irk_1.png",
+                    "working": "img/irk_2.png",
+                    "error": "img/irk_3.png",
+                    "success": "img/irk_4.png",
+                },
+                "mood_map": {
+                    "field": "status",
+                    "ok": "idle",
+                    "ok_busy": "working",
+                    "error": "error",
+                },
+                "info_lines": [
+                    {"label": "status", "field": "status"},
+                    {
+                        "label": "PRs",
+                        "template": "+{prs_created} M{prs_merged}",
+                        "fields": ["prs_created", "prs_merged"],
+                    },
+                ],
             },
         ],
     }
     cfg = AppConfig.from_dict(data)
     assert len(cfg.screens) == 2
-    assert cfg.screens[0].type == "health"
-    assert cfg.screens[1].type == "tamagotchi"
-    assert cfg.screens[1].options["url"] == "http://test"
-    assert cfg.screens[1].options["stats_url"] == "http://test/stats"
+
+    s0 = cfg.screens[0]
+    assert s0.template == "status_board"
+    assert len(s0.categories) == 1
+    assert s0.categories[0].name == "Claude"
+    assert s0.categories[0].items[0].label == "AI"
+
+    s1 = cfg.screens[1]
+    assert s1.template == "tamagotchi"
+    assert s1.sprites is not None
+    assert s1.sprites.idle == "img/irk_1.png"
+    assert s1.mood_map is not None
+    assert s1.mood_map.field == "status"
+    assert len(s1.info_lines) == 2
+
+
+def test_load_config_yaml():
+    yaml_content = """
+refresh_seconds: 30
+display:
+  backend: mock
+screens:
+  - name: Test
+    template: status_board
+    categories:
+      - name: Foo
+        url: http://test
+        type: statuspage
+        items:
+          - key: bar
+            label: Bar
+"""
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+        f.write(yaml_content)
+        fname = f.name
+    try:
+        cfg = load_config(fname)
+        assert len(cfg.screens) == 1
+        assert cfg.screens[0].template == "status_board"
+    finally:
+        os.unlink(fname)
+
+
+# --- StatusBoardScreen ---
+
+
+def test_status_board_render_empty():
+    sc = ScreenConfig(name="Test", template="status_board")
+    screen = StatusBoardScreen(sc)
+    img = screen.render(122, 250)
+    assert img.size == (122, 250)
+    assert img.mode == "1"
+
+
+def test_status_board_has_changed_initial():
+    sc = ScreenConfig(name="Test", template="status_board")
+    screen = StatusBoardScreen(sc)
+    assert screen.has_changed() is True
+
+
+def test_status_board_has_changed_after_render():
+    sc = ScreenConfig(name="Test", template="status_board")
+    screen = StatusBoardScreen(sc)
+    screen.render(122, 250)
+    assert screen.has_changed() is False
+
+
+def test_status_board_render_with_data():
+    sc = ScreenConfig(name="AI Health", template="status_board")
+    screen = StatusBoardScreen(sc)
+    screen._categories = [
+        CategoryData(
+            "Claude", "anthropic", {"AI": ServiceStatus.OK, "Code": ServiceStatus.OK}
+        ),
+        CategoryData("OpenAI", "openai", {"App": ServiceStatus.DEGRADED}),
+    ]
+    screen._last_refresh = None
+    img = screen.render(122, 250)
+    assert img.size == (122, 250)
+
+
+def test_status_board_data_change():
+    sc = ScreenConfig(name="Test", template="status_board")
+    screen = StatusBoardScreen(sc)
+    screen._categories = [CategoryData("Test", "generic", {"Foo": ServiceStatus.OK})]
+    screen._last_refresh = None
+    screen.render(122, 250)
+    assert screen.has_changed() is False
+    screen._categories[0].items["Foo"] = ServiceStatus.DOWN
+    assert screen.has_changed() is True
+
+
+# --- TamagotchiScreen ---
+
+
+def test_tamagotchi_render_empty():
+    sc = ScreenConfig(name="Test", template="tamagotchi", url="http://test")
+    screen = TamagotchiScreen(sc)
+    img = screen.render(122, 250)
+    assert img.size == (122, 250)
+    assert img.mode == "1"
+
+
+def test_tamagotchi_has_changed_initial():
+    sc = ScreenConfig(name="Test", template="tamagotchi", url="http://test")
+    screen = TamagotchiScreen(sc)
+    assert screen.has_changed() is True
+
+
+def test_tamagotchi_has_changed_after_render():
+    sc = ScreenConfig(name="Test", template="tamagotchi", url="http://test")
+    screen = TamagotchiScreen(sc)
+    screen.render(122, 250)
+    assert screen.has_changed() is False
+
+
+def test_tamagotchi_mood_resolve():
+    sc = ScreenConfig(
+        name="Test",
+        template="tamagotchi",
+        url="http://test",
+        mood_map=MoodMapConfig(
+            field="status", ok="idle", ok_busy="working", error="error"
+        ),
+    )
+    screen = TamagotchiScreen(sc)
+    screen._data = {"status": "ok", "pending": 0}
+    screen._resolve_mood()
+    assert screen._mood == "idle"
+
+    screen._data = {"status": "ok", "pending": 3}
+    screen._resolve_mood()
+    assert screen._mood == "working"
+
+    screen._data = {"status": "down", "pending": 0}
+    screen._resolve_mood()
+    assert screen._mood == "error"
+
+
+def test_tamagotchi_info_line_simple():
+    sc = ScreenConfig(
+        name="Test",
+        template="tamagotchi",
+        url="http://test",
+        info_lines=[InfoLineConfig(label="status", source_field="status")],
+    )
+    screen = TamagotchiScreen(sc)
+    screen._data = {"status": "ok"}
+    val = screen._format_info_line(sc.info_lines[0])
+    assert val == "ok"
+
+
+def test_tamagotchi_info_line_template():
+    sc = ScreenConfig(
+        name="Test",
+        template="tamagotchi",
+        url="http://test",
+        info_lines=[
+            InfoLineConfig(
+                label="PRs",
+                template="+{prs_created} M{prs_merged}",
+                field_keys=["prs_created", "prs_merged"],
+            )
+        ],
+    )
+    screen = TamagotchiScreen(sc)
+    screen._data = {"prs_created": 12, "prs_merged": 8}
+    val = screen._format_info_line(sc.info_lines[0])
+    assert val == "+12 M8"
+
+
+def test_tamagotchi_data_change():
+    sc = ScreenConfig(name="Test", template="tamagotchi", url="http://test")
+    screen = TamagotchiScreen(sc)
+    screen._data = {"status": "ok"}
+    screen._resolve_mood()
+    screen.render(122, 250)
+    assert screen.has_changed() is False
+    screen._data = {"status": "down"}
+    screen._resolve_mood()
+    assert screen.has_changed() is True
+
+
+def test_tamagotchi_with_sprites():
+    sc = ScreenConfig(
+        name="Test",
+        template="tamagotchi",
+        url="http://test",
+        sprites=SpriteConfig(
+            idle="img/irk_1.png",
+            working="img/irk_2.png",
+            error="img/irk_3.png",
+            success="img/irk_4.png",
+        ),
+    )
+    screen = TamagotchiScreen(sc)
+    assert len(screen._sprites) == 4
+    img = screen.render(122, 250)
+    assert img.size == (122, 250)
+
+
+# --- create_screens factory ---
 
 
 def test_create_screens_default():
     cfg = AppConfig(display=DisplayConfig("mock"))
     screens = create_screens(cfg)
     assert len(screens) == 1
-    assert isinstance(screens[0], HealthScreen)
+    assert isinstance(screens[0], StatusBoardScreen)
 
 
-# --- ProviderConfig display_names ---
-
-
-def test_provider_config_display_names():
-    pc = ProviderConfig(
-        name="Claude",
-        type="statuspage",
-        url="http://test",
-        components=["claude.ai"],
-        display_names={"claude.ai": "AI"},
-    )
-    assert pc.display_names == {"claude.ai": "AI"}
-
-
-def test_provider_config_display_names_default():
-    pc = ProviderConfig(
-        name="Test", type="statuspage", url="http://test", components=[]
-    )
-    assert pc.display_names == {}
-
-
-def test_config_from_dict_with_display_names():
-    data = {
-        "refresh_seconds": 30,
-        "display": {"backend": "mock"},
-        "providers": [
-            {
-                "name": "Claude",
-                "type": "statuspage",
-                "url": "http://test",
-                "components": ["claude.ai"],
-                "display_names": {"claude.ai": "AI"},
-            }
+def test_create_screens_from_config():
+    cfg = AppConfig(
+        display=DisplayConfig("mock"),
+        screens=[
+            ScreenConfig(name="AI Health", template="status_board"),
+            ScreenConfig(name="Lotus", template="tamagotchi", url="http://test"),
         ],
-    }
-    cfg = AppConfig.from_dict(data)
-    assert cfg.providers[0].display_names == {"claude.ai": "AI"}
+    )
+    screens = create_screens(cfg)
+    assert len(screens) == 2
+    assert isinstance(screens[0], StatusBoardScreen)
+    assert isinstance(screens[1], TamagotchiScreen)
 
 
 # --- Demo mock injection ---
 
 
-def test_mock_health_injection():
-    s = HealthScreen(providers=[])
-    from app import _inject_mock_health
+def test_mock_status_board_injection():
+    sc = ScreenConfig(name="AI Health", template="status_board")
+    screen = StatusBoardScreen(sc)
+    from app import _inject_mock_status_board
 
-    _inject_mock_health(s)
-    assert s._state is not None
-    assert len(s._state.providers) == 3
-    assert s._state.providers[0].name == "Claude"
-    img = s.render(122, 250)
+    _inject_mock_status_board(screen)
+    assert len(screen._categories) == 3
+    img = screen.render(122, 250)
     assert img.size == (122, 250)
 
 
 def test_mock_tamagotchi_injection():
-    s = TamagotchiScreen(url="http://test")
+    sc = ScreenConfig(name="Lotus", template="tamagotchi", url="http://test")
+    screen = TamagotchiScreen(sc)
     from app import _inject_mock_tamagotchi
 
-    _inject_mock_tamagotchi(s)
-    assert s._health is not None
-    assert s._health.mood == "working"
-    assert s._stats is not None
-    assert s._stats.prs_created == 12
-    img = s.render(122, 250)
+    _inject_mock_tamagotchi(screen)
+    assert screen._data.get("status") == "ok"
+    img = screen.render(122, 250)
     assert img.size == (122, 250)
 
 

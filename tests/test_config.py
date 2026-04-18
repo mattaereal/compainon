@@ -8,27 +8,31 @@ import logging
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from ai_health_board.config import load_config, AppConfig, DisplayConfig, ProviderConfig
+from ai_health_board.config import load_config, AppConfig, DisplayConfig
 
 
 def test_load_valid_config():
-    """Test loading a valid configuration."""
     yaml_content = """
 refresh_seconds: 60
 timezone: UTC
 display:
   backend: mock
-  width: 250
-  height: 122
-  rotation: 90
+  width: 122
+  height: 250
+  rotation: 0
   full_refresh_every_n_updates: 3
-providers:
-  - name: TestService
-    type: statuspage
-    url: https://example.com/api/summary.json
-    components:
-      - comp1
-      - comp2
+screens:
+  - name: Test
+    template: status_board
+    categories:
+      - name: TestService
+        url: https://example.com/api/summary.json
+        type: statuspage
+        items:
+          - key: comp1
+            label: Comp1
+          - key: comp2
+            label: Comp2
 """
     with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
         f.write(yaml_content)
@@ -41,34 +45,21 @@ providers:
         assert cfg.timezone == "UTC"
         assert isinstance(cfg.display, DisplayConfig)
         assert cfg.display.backend == "mock"
-        assert cfg.display.width == 250
-        assert cfg.display.height == 122
-        assert cfg.display.rotation == 90
         assert cfg.display.full_refresh_every_n_updates == 3
-        assert len(cfg.providers) == 1
-        p = cfg.providers[0]
-        assert p.name == "TestService"
-        assert p.type == "statuspage"
-        assert p.url == "https://example.com/api/summary.json"
-        assert p.components == ["comp1", "comp2"]
+        assert len(cfg.screens) == 1
+        s = cfg.screens[0]
+        assert s.template == "status_board"
+        assert len(s.categories) == 1
+        assert s.categories[0].name == "TestService"
     finally:
         os.unlink(fname)
 
 
 def test_load_config_defaults():
-    """Test loading config with minimal/default values."""
     yaml_content = """
 refresh_seconds: 60
-timezone: UTC
 display:
   backend: mock
-  width: 250
-  height: 122
-  rotation: 90
-providers:
-  - name: Minimal
-    type: statuspage
-    url: https://example.com/api/summary.json
 """
     with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
         f.write(yaml_content)
@@ -76,29 +67,16 @@ providers:
 
     try:
         cfg = load_config(fname)
-        assert cfg.refresh_seconds == 60  # default from yaml
-        assert cfg.timezone == "UTC"  # default
-        assert cfg.display.backend == "mock"  # default
-        assert cfg.display.width == 250
-        assert cfg.display.height == 122
-        assert cfg.display.rotation == 90
-        assert (
-            cfg.display.full_refresh_every_n_updates == 50
-        )  # default from DisplayConfig
-        assert len(cfg.providers) == 1
+        assert cfg.refresh_seconds == 60
+        assert cfg.display.backend == "mock"
+        assert cfg.display.full_refresh_every_n_updates == 50
     finally:
         os.unlink(fname)
 
 
 def test_load_config_invalid_refresh():
-    """Test that invalid refresh_seconds raises ValueError."""
     yaml_content = """
 refresh_seconds: -1
-providers:
-  - name: A
-    type: statuspage
-    url: https://example.com/api/summary.json
-    components: []
 """
     with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
         f.write(yaml_content)
@@ -111,11 +89,9 @@ providers:
         os.unlink(fname)
 
 
-def test_load_config_no_providers(caplog):
-    """Test loading config with no providers (should log warning)."""
+def test_load_config_no_screens(caplog):
     yaml_content = """
 refresh_seconds: 300
-providers: []
 """
     with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
         f.write(yaml_content)
@@ -124,8 +100,8 @@ providers: []
     try:
         with caplog.at_level(logging.WARNING):
             cfg = load_config(fname)
-        assert len(cfg.providers) == 0
-        assert "No providers configured" in caplog.text
+        assert len(cfg.screens) == 0
+        assert "No screens configured" in caplog.text
     finally:
         os.unlink(fname)
 

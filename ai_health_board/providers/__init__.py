@@ -10,7 +10,6 @@ logger = logging.getLogger(__name__)
 _BACKENDS: Dict[str, Any] = {
     "statuspage": "ai_health_board.providers.statuspage.StatuspageProvider",
     "lotus_health": "ai_health_board.providers.lotus_health.LotusHealthProvider",
-    "lotus_stats": "ai_health_board.providers.lotus_stats.LotusStatsProvider",
 }
 
 

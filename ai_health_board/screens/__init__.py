@@ -4,7 +4,7 @@ import logging
 from typing import List
 
 from .base import Screen
-from ..config import AppConfig
+from ..config import AppConfig, ScreenConfig
 
 logger = logging.getLogger(__name__)
 
@@ -14,39 +14,24 @@ def create_screens(config: AppConfig) -> List[Screen]:
     screens: List[Screen] = []
 
     for sc in config.screens:
-        if sc.type == "health":
-            from .health import HealthScreen
+        if sc.template == "status_board":
+            from .status_board import StatusBoardScreen
 
-            screens.append(
-                HealthScreen(
-                    providers=config.providers,
-                    poll_interval=sc.poll_interval,
-                    display_duration=sc.display_duration,
-                )
-            )
-        elif sc.type == "tamagotchi":
+            screens.append(StatusBoardScreen(sc))
+        elif sc.template == "tamagotchi":
             from .tamagotchi import TamagotchiScreen
 
-            url = sc.options.get("url", "")
-            if not url:
-                raise ValueError("Tamagotchi screen requires 'url' in options")
-            stats_url = sc.options.get("stats_url", "")
-            screens.append(
-                TamagotchiScreen(
-                    url=url,
-                    poll_interval=sc.poll_interval,
-                    display_duration=sc.display_duration,
-                    stats_url=stats_url,
-                )
-            )
+            screens.append(TamagotchiScreen(sc))
         else:
-            raise ValueError(f"Unknown screen type: {sc.type}")
+            raise ValueError(f"Unknown screen template: {sc.template}")
 
     if not screens:
-        from .health import HealthScreen
+        from .status_board import StatusBoardScreen
 
-        logger.info("No screens configured, defaulting to health screen")
-        screens.append(HealthScreen(providers=config.providers))
+        logger.info("No screens configured, defaulting to status_board")
+        screens.append(
+            StatusBoardScreen(ScreenConfig(name="Status", template="status_board"))
+        )
 
     logger.info(f"Created {len(screens)} screen(s)")
     return screens

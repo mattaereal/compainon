@@ -9,33 +9,24 @@ import time
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
-from ai_health_board.config import load_config, AppConfig
+from ai_health_board.config import load_config, AppConfig, ScreenConfig
 from ai_health_board.display import get_display
 from ai_health_board.display.base import DisplayBackend
 from ai_health_board.screens import create_screens
 from ai_health_board.screens.base import Screen
-from ai_health_board.screens.health import HealthScreen
+from ai_health_board.screens.status_board import StatusBoardScreen, CategoryData
 from ai_health_board.screens.tamagotchi import TamagotchiScreen
 from ai_health_board.scheduler import screen_loop
-from ai_health_board.cache import load_cache
-from ai_health_board.models import (
-    AppState,
-    ServiceStatus,
-    ProviderStatus,
-    ComponentStatus,
-    LotusHealthStatus,
-    LotusStatsData,
-)
+from ai_health_board.models import ServiceStatus
 
 logger = logging.getLogger(__name__)
 
 
 async def _run_once(screens: List[Screen], display: DisplayBackend) -> None:
-    """Fetch and render all screens once."""
     from aiohttp import ClientSession
 
     async with ClientSession() as session:
-        for i, screen in enumerate(screens):
+        for screen in screens:
             try:
                 await screen.fetch(session)
                 img = screen.render(display.width, display.height)
@@ -45,85 +36,71 @@ async def _run_once(screens: List[Screen], display: DisplayBackend) -> None:
                 logger.error(f"Failed screen {screen.__class__.__name__}: {e}")
 
 
-def _build_mock_health_state() -> AppState:
-    """Build a mock AppState with all providers OK."""
-    return AppState(
-        last_refresh=datetime.now(timezone.utc),
-        providers=[
-            ProviderStatus(
-                name="Claude",
-                provider_type="statuspage",
-                status=ServiceStatus.OK,
-                components=[
-                    ComponentStatus("claude.ai", ServiceStatus.OK),
-                    ComponentStatus("Claude Code", ServiceStatus.OK),
-                    ComponentStatus("Claude API (api.anthropic.com)", ServiceStatus.OK),
-                ],
-            ),
-            ProviderStatus(
-                name="OpenAI",
-                provider_type="statuspage",
-                status=ServiceStatus.OK,
-                components=[
-                    ComponentStatus("App", ServiceStatus.OK),
-                    ComponentStatus("Conversations", ServiceStatus.OK),
-                    ComponentStatus("Codex Web", ServiceStatus.OK),
-                    ComponentStatus("Codex API", ServiceStatus.OK),
-                ],
-            ),
-            ProviderStatus(
-                name="Lotus",
-                provider_type="lotus_health",
-                status=ServiceStatus.OK,
-                components=[
-                    ComponentStatus("Lotus", ServiceStatus.OK),
-                    ComponentStatus("Queue", ServiceStatus.OK),
-                ],
-            ),
-        ],
-        stale=False,
-    )
-
-
-def _inject_mock_health(screen: HealthScreen) -> None:
-    """Inject mock provider data into a health screen."""
-    screen._state = _build_mock_health_state()
+def _inject_mock_status_board(screen: StatusBoardScreen) -> None:
+    """Inject mock data into a status board screen."""
+    screen._categories = [
+        CategoryData(
+            "Claude",
+            "anthropic",
+            {
+                "AI": ServiceStatus.OK,
+                "Code": ServiceStatus.OK,
+                "API": ServiceStatus.OK,
+            },
+        ),
+        CategoryData(
+            "OpenAI",
+            "openai",
+            {
+                "App": ServiceStatus.OK,
+                "Chat": ServiceStatus.OK,
+                "Web": ServiceStatus.OK,
+                "API": ServiceStatus.OK,
+            },
+        ),
+        CategoryData(
+            "Lotus",
+            "lotus",
+            {
+                "Live": ServiceStatus.OK,
+                "Queue": ServiceStatus.OK,
+            },
+        ),
+    ]
+    screen._last_refresh = datetime.now(timezone.utc)
 
 
 def _inject_mock_tamagotchi(screen: TamagotchiScreen) -> None:
-    """Inject mock health + stats data into a tamagotchi screen."""
-    screen._health = LotusHealthStatus(
-        status="ok",
-        proxy=True,
-        pending=2,
-        last_checked=datetime.now(timezone.utc),
-    )
-    screen._stats = LotusStatsData(
-        prs_created=12,
-        prs_merged=8,
-        issues_created=3,
-        comments_resolved=47,
-        commits_today=6,
-        lines_changed=2340,
-        uptime_seconds=86400,
-        last_action="merged PR #142",
-        last_action_time=datetime.now(timezone.utc),
-    )
+    """Inject mock data into a tamagotchi screen."""
+    screen._data = {
+        "status": "ok",
+        "proxy": True,
+        "pending": 2,
+        "prs_created": 12,
+        "prs_merged": 8,
+        "issues_created": 3,
+        "comments_resolved": 47,
+        "commits_today": 6,
+        "lines_changed": 2340,
+        "last_action": "merged PR #142",
+        "__last_checked": datetime.now(timezone.utc).isoformat(),
+    }
+    screen._resolve_mood()
 
 
 def _demo(
     screens: List[Screen], display: DisplayBackend, animate: bool = False
 ) -> None:
-    """Render each screen with mock data, cycling tamagotchi through all 4 sprites."""
+    """Render each screen with mock data."""
     for screen in screens:
-        if isinstance(screen, HealthScreen):
-            _inject_mock_health(screen)
+        if isinstance(screen, StatusBoardScreen):
+            _inject_mock_status_board(screen)
             img = screen.render(display.width, display.height)
             display.render_image(img)
-            print("  Health screen rendered -> out/frame.png")
+            print("  Status board rendered -> out/frame.png")
 
             if animate:
-                _animate_health(screen, display)
+                _animate_status_board(screen, display)
 
         elif isinstance(screen, TamagotchiScreen):
             _inject_mock_tamagotchi(screen)
@@ -140,20 +117,14 @@ def _demo(
             img.save(final_path, format="PNG")
 
 
-def _animate_health(screen: HealthScreen, display: DisplayBackend) -> None:
-    """Animate health screen status changes to test partial refresh."""
-    state = screen._state
-    if not state:
-        return
-
+def _animate_status_board(screen: StatusBoardScreen, display: DisplayBackend) -> None:
+    """Animate status changes to test partial refresh."""
     print("  Animating status changes (partial refresh)...")
 
-    # Step 1: Claude API -> DEGRADED
-    for prov in state.providers:
-        for comp in prov.components:
-            if "API" in comp.name and prov.name == "Claude":
-                comp.status = ServiceStatus.DEGRADED
-                prov.status = ServiceStatus.DEGRADED
+    # Claude API -> DEGRADED
+    for cat in screen._categories:
+        if cat.name == "Claude":
+            cat.items["API"] = ServiceStatus.DEGRADED
     screen._last_render_hash = None
     img = screen.render(display.width, display.height)
     display.render_image(img)
@@ -161,12 +132,10 @@ def _animate_health(screen: HealthScreen, display: DisplayBackend) -> None:
     print("    Claude API -> [!] DEGRADED")
     time.sleep(2)
 
-    # Step 2: OpenAI App -> DOWN
-    for prov in state.providers:
-        for comp in prov.components:
-            if comp.name == "App" and prov.name == "OpenAI":
-                comp.status = ServiceStatus.DOWN
-                prov.status = ServiceStatus.DOWN
+    # OpenAI App -> DOWN
+    for cat in screen._categories:
+        if cat.name == "OpenAI":
+            cat.items["App"] = ServiceStatus.DOWN
     screen._last_render_hash = None
     img = screen.render(display.width, display.height)
     display.render_image(img)
@@ -174,11 +143,10 @@ def _animate_health(screen: HealthScreen, display: DisplayBackend) -> None:
     print("    OpenAI App -> [-] DOWN")
     time.sleep(2)
 
-    # Step 3: Restore all to OK
-    for prov in state.providers:
-        prov.status = ServiceStatus.OK
-        for comp in prov.components:
-            comp.status = ServiceStatus.OK
+    # Restore all
+    for cat in screen._categories:
+        for key in list(cat.items.keys()):
+            cat.items[key] = ServiceStatus.OK
     screen._last_render_hash = None
     img = screen.render(display.width, display.height)
     display.render_image(img)
@@ -209,7 +177,6 @@ def main() -> None:
     )
 
     subparsers.add_parser("once", help="Perform one refresh cycle and exit")
-
     subparsers.add_parser("preview", help="Render a single PNG without hardware")
 
     demo_parser = subparsers.add_parser(
@@ -236,9 +203,7 @@ def main() -> None:
         print(f"Python: {platform.python_version()}")
         try:
             cfg = load_config(args.config)
-            print(
-                f"Config: loaded ({len(cfg.providers)} provider(s), {len(cfg.screens)} screen(s))"
-            )
+            print(f"Config: loaded ({len(cfg.screens)} screen(s))")
         except Exception as e:
             print(f"Config: ERROR - {e}")
             sys.exit(1)
@@ -255,7 +220,7 @@ def main() -> None:
 
             print(f"aiohttp: {aiohttp.__version__}")
         except ImportError:
-            print("aiohttp: MISSING (install with: pip install aiohttp)")
+            print("aiohttp: MISSING")
 
         gpio_factory = os.environ.get("GPIOZERO_PIN_FACTORY", "")
         print(f"GPIOZERO_PIN_FACTORY: {gpio_factory or 'NOT SET'}")
@@ -263,17 +228,8 @@ def main() -> None:
             print("  Set: export GPIOZERO_PIN_FACTORY=lgpio")
 
         print("")
-        spi_devs = ["/dev/spidev0.0", "/dev/spidev0.1"]
-        spi_found = False
-        for d in spi_devs:
-            if os.path.exists(d):
-                print(f"SPI device: {d} - EXISTS")
-                spi_found = True
-            else:
-                print(f"SPI device: {d} - NOT FOUND")
-
-        if not spi_found:
-            print("  Enable: sudo raspi-config -> Interface Options -> SPI -> Enable")
+        for d in ["/dev/spidev0.0", "/dev/spidev0.1"]:
+            print(f"SPI device: {d} - {'EXISTS' if os.path.exists(d) else 'NOT FOUND'}")
 
         try:
             import lgpio
@@ -288,10 +244,6 @@ def main() -> None:
             print("waveshare_epd V3: INSTALLED")
         except ImportError:
             print("waveshare_epd V3: NOT INSTALLED")
-            print("  git clone https://github.com/waveshareteam/e-Paper.git")
-            print("  cd e-Paper/RaspberryPi_JetsonNano/python")
-            print("  sudo apt install -y python3-setuptools")
-            print("  sudo python3 setup.py install")
 
         print("\n=== End Doctor ===")
         return
