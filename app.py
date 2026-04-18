@@ -9,77 +9,29 @@ from typing import Dict, List, Optional
 
 from ai_health_board.config import load_config, AppConfig
 from ai_health_board.display import get_display
-from ai_health_board.providers import get_provider
-from ai_health_board.render import render_state
-from ai_health_board.scheduler import poll_loop
-from ai_health_board.cache import load_cache, save_cache
+from ai_health_board.display.base import DisplayBackend
+from ai_health_board.screens import create_screens
+from ai_health_board.screens.base import Screen
+from ai_health_board.scheduler import screen_loop
+from ai_health_board.cache import load_cache
 from ai_health_board.models import AppState, ServiceStatus, ProviderStatus
 
 logger = logging.getLogger(__name__)
 
 
-def build_state(config: AppConfig) -> None:
-    """Fetch all providers and build the aggregated state dict."""
-    cache = load_cache() or {}
+async def _run_once(screens: List[Screen], display: DisplayBackend) -> None:
+    """Fetch and render all screens once."""
+    from aiohttp import ClientSession
 
-    async def run_once() -> None:
-        from aiohttp import ClientSession
-
-        async with ClientSession() as session:
-            # Create provider instances from config
-            providers = []
-            for provider_config in config.providers:
-                try:
-                    provider = get_provider(provider_config)
-                    providers.append(provider)
-                except Exception as e:
-                    logger.error(
-                        f"Failed to create provider {provider_config.name}: {e}"
-                    )
-
-            # Fetch status from all providers
-            tasks = [provider.get_status(session) for provider in providers]
-            results = await asyncio.gather(*tasks, return_exceptions=True)
-
-        resolved: List[Optional[ProviderStatus]] = []
-        for r in results:
-            if isinstance(r, Exception):
-                logger.warning(f"Provider fetch failed: {r}")
-                resolved.append(None)
-            else:
-                resolved.append(r)
-
-        state = AppState(
-            last_refresh=datetime.now(timezone.utc),
-            providers=[r for r in resolved if r is not None],
-            stale=False,
-        )
-
-        # Merge with cache for missing providers / components
-        if cache and "providers" in cache:
-            cached_provs = {p["name"]: p for p in cache["providers"]}
-            for prov in state.providers:
-                if prov.name in cached_provs:
-                    cached = cached_provs[prov.name]
-                    cached_map = {
-                        c["name"]: c["status"] for c in cached.get("components", [])
-                    }
-                    for comp in prov.components:
-                        if (
-                            comp.status == ServiceStatus.UNKNOWN
-                            and comp.name in cached_map
-                        ):
-                            comp.status = ServiceStatus(cached_map[comp.name])
-                            comp.failure_count = cached.get("consecutive_failures", 0)
-
-        save_cache(state.to_dict())
-        render_state(state.to_dict(), config.display)
-
-    try:
-        asyncio.run(run_once())
-    except Exception as e:
-        logger.exception(f"Run failed: {e}")
-        sys.exit(1)
+    async with ClientSession() as session:
+        for i, screen in enumerate(screens):
+            try:
+                await screen.fetch(session)
+                img = screen.render(display.width, display.height)
+                display.render_image(img, full_refresh=True)
+                logger.info(f"Rendered screen {screen.__class__.__name__}")
+            except Exception as e:
+                logger.error(f"Failed screen {screen.__class__.__name__}: {e}")
 
 
 def main() -> None:
@@ -95,7 +47,6 @@ def main() -> None:
     )
     subparsers = parser.add_subparsers(dest="command", help="Command to run")
 
-    # run command
     run_parser = subparsers.add_parser("run", help="Run as a long-running service")
     run_parser.add_argument(
         "--once-after",
@@ -104,18 +55,14 @@ def main() -> None:
         help="Initial delay in seconds before first refresh",
     )
 
-    # once command
     subparsers.add_parser("once", help="Perform one refresh cycle and exit")
 
-    # preview command
     subparsers.add_parser("preview", help="Render a single PNG without hardware")
 
-    # doctor command
     subparsers.add_parser("doctor", help="Validate configuration and environment")
 
     args = parser.parse_args()
 
-    # Setup logging before anything else
     from ai_health_board.logging_setup import setup_logging
 
     setup_logging()
@@ -128,9 +75,11 @@ def main() -> None:
         print(f"Python: {platform.python_version()}")
         try:
             cfg = load_config(args.config)
-            print(f"Config: loaded ({len(cfg.providers)} provider(s))")
+            print(
+                f"Config: loaded ({len(cfg.providers)} provider(s), {len(cfg.screens)} screen(s))"
+            )
         except Exception as e:
-            print(f"Config: ERROR – {e}")
+            print(f"Config: ERROR - {e}")
             sys.exit(1)
 
         try:
@@ -138,9 +87,8 @@ def main() -> None:
 
             print("Imports: OK")
         except Exception as e:
-            print(f"Imports: FAIL – {e}")
+            print(f"Imports: FAIL - {e}")
 
-        # Check aiohttp
         try:
             import aiohttp
 
@@ -148,27 +96,24 @@ def main() -> None:
         except ImportError:
             print("aiohttp: MISSING (install with: pip install aiohttp)")
 
-        # GPIO pin factory (required on Trixie/Bookworm)
         gpio_factory = os.environ.get("GPIOZERO_PIN_FACTORY", "")
         print(f"GPIOZERO_PIN_FACTORY: {gpio_factory or 'NOT SET'}")
         if not gpio_factory:
             print("  Set: export GPIOZERO_PIN_FACTORY=lgpio")
 
-        # SPI detection
         print("")
         spi_devs = ["/dev/spidev0.0", "/dev/spidev0.1"]
         spi_found = False
         for d in spi_devs:
             if os.path.exists(d):
-                print(f"SPI device: {d} – EXISTS")
+                print(f"SPI device: {d} - EXISTS")
                 spi_found = True
             else:
-                print(f"SPI device: {d} – NOT FOUND")
+                print(f"SPI device: {d} - NOT FOUND")
 
         if not spi_found:
             print("  Enable: sudo raspi-config -> Interface Options -> SPI -> Enable")
 
-        # lgpio check (required on Trixie)
         try:
             import lgpio
 
@@ -176,7 +121,6 @@ def main() -> None:
         except ImportError:
             print("\nlgpio: MISSING (sudo apt install python3-lgpio)")
 
-        # Waveshare V3 driver check
         try:
             from waveshare_epd import epd2in13_V3
 
@@ -194,32 +138,42 @@ def main() -> None:
     cfg = load_config(args.config)
 
     if args.command == "preview":
-        cache = load_cache() or {}
-        render_state(
-            {
-                "last_refresh": None,
-                "stale": True,
-                "providers": cache.get("providers", []),
-            },
-            cfg.display,
-        )
+        display = get_display(cfg.display)
+        screens = create_screens(cfg)
+        if screens:
+            img = screens[0].render(display.width, display.height)
+            display.render_image(img, full_refresh=True)
         print("Preview rendered to out/frame.png")
         return
 
     if args.command == "once":
-        build_state(cfg)
+        display = get_display(cfg.display)
+        screens = create_screens(cfg)
+        asyncio.run(_run_once(screens, display))
+        display.close()
         return
 
     if args.command == "run":
-        logger.info("Starting long-running refresh loop")
-        poll_loop(
-            lambda: build_state(cfg),
-            refresh_seconds=cfg.refresh_seconds,
-            initial_delay=args.once_after,
-        )
-    else:
-        parser.print_help()
-        sys.exit(1)
+        logger.info("Starting screen-cycling loop")
+        display = get_display(cfg.display)
+        screens = create_screens(cfg)
+
+        if args.once_after:
+            logger.info(f"Initial delay {args.once_after}s before first refresh")
+            import time
+
+            time.sleep(args.once_after)
+
+        try:
+            asyncio.run(screen_loop(screens, display))
+        except KeyboardInterrupt:
+            logger.info("Shutting down")
+        finally:
+            display.close()
+        return
+
+    parser.print_help()
+    sys.exit(1)
 
 
 if __name__ == "__main__":

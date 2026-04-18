@@ -1,9 +1,7 @@
 """Mock display backend that writes PNG files.
 
-Simulates the same layout as the Waveshare 2.13" V3 e-paper:
-- EPD native: 122x250 (portrait)
-- Image created in landscape: (250, 122)
-- Output PNG saved in landscape orientation
+Portrait mode: images at (122, 250) matching EPD native dims.
+PNG output saved in portrait orientation.
 """
 
 import logging
@@ -48,16 +46,14 @@ class MockPNGDisplay(DisplayBackend):
     """Renders status to a local PNG file (useful for testing on laptops)."""
 
     def __init__(self, config: Union[DisplayConfig, Dict[str, Any]]):
-        # EPD native portrait resolution
         self._width = _get_display_value(config, "width", 122)
         self._height = _get_display_value(config, "height", 250)
-        # Create landscape image matching V3 getbuffer() expectations
-        self._img: Image.Image = Image.new("1", (self._height, self._width), 255)
+        self._img: Image.Image = Image.new("1", (self._width, self._height), 255)
         self._draw = ImageDraw.Draw(self._img)
         self._out_dir = "out"
         os.makedirs(self._out_dir, exist_ok=True)
         logger.info(
-            f"MockPNGDisplay initialized (landscape {self._height}x{self._width})"
+            f"MockPNGDisplay initialized (portrait {self._width}x{self._height})"
         )
 
     @property
@@ -73,20 +69,14 @@ class MockPNGDisplay(DisplayBackend):
         return self._height
 
     def render(self, state: Dict[str, Any]) -> None:
-        # Image is landscape: (height=250, width=122)
-        img_w = self._height  # 250
-        img_h = self._width  # 122
-
-        self._draw.rectangle([0, 0, img_w, img_h], fill=255)
+        self._draw.rectangle([0, 0, self._width, self._height], fill=255)
         margin = 4
         line_h = 12
-        start_y = 2
+        y = 4
 
-        # Title
-        self._draw.text((margin, start_y), "AI HEALTH", fill=0)
-        start_y += line_h + 2
+        self._draw.text((margin, y), "AI HEALTH", fill=0)
+        y += line_h + 2
 
-        # Timestamp
         ts = state.get("last_refresh")
         if ts:
             try:
@@ -94,26 +84,32 @@ class MockPNGDisplay(DisplayBackend):
                     dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
                 else:
                     dt = ts
-                self._draw.text(
-                    (margin, start_y), dt.strftime("%Y-%m-%d %H:%M"), fill=0
-                )
+                self._draw.text((margin, y), dt.strftime("%H:%M:%S"), fill=0)
             except Exception:
-                self._draw.text((margin, start_y), str(ts), fill=0)
-        start_y += line_h + 2
+                self._draw.text((margin, y), str(ts), fill=0)
+        y += line_h + 2
 
-        # Providers
+        self._draw.line([(margin, y), (self._width - margin, y)], fill=0)
+        y += 4
+
         providers = _norm_providers(state.get("providers", []))
         for provider in providers:
+            if y + line_h > self._height - 14:
+                self._draw.text((margin, y), "...", fill=0)
+                break
             ptype = provider.get("provider_type", "?").upper()
             pname = provider.get("name", "?")
             pstatus = provider.get("status", "UNKNOWN")
             agg_icon = _STATUS_ICONS.get(pstatus, "[?]")
-            self._draw.text((margin, start_y), f"[{ptype}]", fill=0)
-            self._draw.text((margin + 55, start_y), pname, fill=0)
-            self._draw.text((margin + 160, start_y), agg_icon, fill=0)
-            start_y += line_h
+            if len(pname) > 12:
+                pname = pname[:9] + "..."
+            self._draw.text((margin, y), agg_icon, fill=0)
+            self._draw.text((margin + 26, y), pname, fill=0)
+            y += line_h
 
             for comp in provider.get("components", []):
+                if y + line_h > self._height - 14:
+                    break
                 if isinstance(comp, dict):
                     cstatus = comp.get("status", "UNKNOWN")
                     cname = comp.get("name", "?")
@@ -122,22 +118,35 @@ class MockPNGDisplay(DisplayBackend):
                     cname = comp.name
                 comp_icon = _STATUS_ICONS.get(cstatus, "[?]")
                 text = str(cname)
-                if len(text) > 28:
-                    text = text[:25] + "..."
-                self._draw.text((margin + 8, start_y), comp_icon, fill=0)
-                self._draw.text((margin + 28, start_y), text, fill=0)
-                start_y += line_h
+                if len(text) > 14:
+                    text = text[:11] + "..."
+                self._draw.text((margin + 8, y), comp_icon, fill=0)
+                self._draw.text((margin + 30, y), text, fill=0)
+                y += line_h
 
-        # Footer
-        start_y = img_h - line_h - 2
+        footer_y = self._height - line_h - 2
         footer = "ok" if state.get("last_refresh") else "no data"
         if state.get("stale"):
             footer += " | STALE"
-        self._draw.text((margin, start_y), footer, fill=0)
+        self._draw.text((margin, footer_y), footer, fill=0)
 
-    def flush(self) -> None:
+        self._save_png()
+
+    def render_image(self, img: Image.Image, full_refresh: bool = False) -> None:
+        """Save a PIL Image as PNG."""
+        self._img = img
+        self._draw = ImageDraw.Draw(self._img)
+        self._save_png()
+
+    def _save_png(self) -> None:
         tmp_path = os.path.join(self._out_dir, "frame.png.tmp")
         final_path = os.path.join(self._out_dir, "frame.png")
         self._img.save(tmp_path, format="PNG")
         os.replace(tmp_path, final_path)
         logger.debug("Mock PNG written to out/frame.png")
+
+    def flush(self) -> None:
+        pass
+
+    def close(self) -> None:
+        pass

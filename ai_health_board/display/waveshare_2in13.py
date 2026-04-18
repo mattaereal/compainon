@@ -1,11 +1,8 @@
 """Waveshare 2.13" V3 e-paper display backend.
 
-Based on the working epd_2in13_V3_test.py patterns:
-- Driver: waveshare_epd.epd2in13_V3
-- EPD resolution: width=122, height=250 (portrait)
-- Image created as (epd.height, epd.width) = (250, 122) in landscape
-- getbuffer() auto-rotates if dimensions match (height, width)
-- fill=255 for white, fill=0 for black in mode '1'
+Portrait mode: images created at (122, 250) matching EPD native dims.
+getbuffer() passes through directly when image dims match EPD dims.
+Partial refresh: displayPartBaseImage() for full, displayPartial() for fast updates.
 """
 
 import logging
@@ -51,25 +48,22 @@ def _norm_providers(raw: List[Any]) -> List[Dict[str, Any]]:
 
 
 class Waveshare2in13V3Display(DisplayBackend):
-    """Waveshare 2.13" V3 b/w e-paper display backend."""
+    """Waveshare 2.13" V3 b/w e-paper display backend (portrait mode)."""
 
     def __init__(self, config: Union[DisplayConfig, Dict[str, Any]]):
         self._epd = None
         self._update_count = 0
+        self._base_set = False
         self._full_refresh_every = _get_display_value(
             config, "full_refresh_every_n_updates", 6
         )
         self._init_display()
-        # After init, read actual resolution from the driver
         self._width = self._epd.width  # 122
         self._height = self._epd.height  # 250
-        # Create image in landscape: (height, width) so getbuffer auto-rotates
-        self._img: Image.Image = Image.new("1", (self._height, self._width), 255)
+        self._img: Image.Image = Image.new("1", (self._width, self._height), 255)
         self._draw = ImageDraw.Draw(self._img)
         logger.info(
-            f"Waveshare2in13V3 initialized: "
-            f"EPD {self._width}x{self._height}, "
-            f"image {self._height}x{self._width}"
+            f"Waveshare2in13V3 initialized: portrait {self._width}x{self._height}"
         )
 
     def _init_display(self) -> None:
@@ -103,20 +97,14 @@ class Waveshare2in13V3Display(DisplayBackend):
         return self._height
 
     def render(self, state: Dict[str, Any]) -> None:
-        # Image is (250, 122) landscape; getbuffer will rotate to (122, 250)
-        img_w = self._height  # 250
-        img_h = self._width  # 122
-
-        self._draw.rectangle([0, 0, img_w, img_h], fill=255)
+        self._draw.rectangle([0, 0, self._width, self._height], fill=255)
         margin = 4
         line_h = 12
-        start_y = 2
+        y = 4
 
-        # Title
-        self._draw.text((margin, start_y), "AI HEALTH", fill=0)
-        start_y += line_h + 2
+        self._draw.text((margin, y), "AI HEALTH", fill=0)
+        y += line_h + 2
 
-        # Timestamp
         ts = state.get("last_refresh")
         if ts:
             try:
@@ -124,26 +112,32 @@ class Waveshare2in13V3Display(DisplayBackend):
                     dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
                 else:
                     dt = ts
-                self._draw.text(
-                    (margin, start_y), dt.strftime("%Y-%m-%d %H:%M"), fill=0
-                )
+                self._draw.text((margin, y), dt.strftime("%H:%M:%S"), fill=0)
             except Exception:
-                self._draw.text((margin, start_y), str(ts), fill=0)
-        start_y += line_h + 2
+                self._draw.text((margin, y), str(ts), fill=0)
+        y += line_h + 2
 
-        # Providers
+        self._draw.line([(margin, y), (self._width - margin, y)], fill=0)
+        y += 4
+
         providers = _norm_providers(state.get("providers", []))
         for provider in providers:
+            if y + line_h > self._height - 14:
+                self._draw.text((margin, y), "...", fill=0)
+                break
             ptype = provider.get("provider_type", "?").upper()
             pname = provider.get("name", "?")
             pstatus = provider.get("status", "UNKNOWN")
             agg_icon = _STATUS_ICONS.get(pstatus, "[?]")
-            self._draw.text((margin, start_y), f"[{ptype}]", fill=0)
-            self._draw.text((margin + 55, start_y), pname, fill=0)
-            self._draw.text((margin + 160, start_y), agg_icon, fill=0)
-            start_y += line_h
+            if len(pname) > 12:
+                pname = pname[:9] + "..."
+            self._draw.text((margin, y), agg_icon, fill=0)
+            self._draw.text((margin + 26, y), pname, fill=0)
+            y += line_h
 
             for comp in provider.get("components", []):
+                if y + line_h > self._height - 14:
+                    break
                 if isinstance(comp, dict):
                     cstatus = comp.get("status", "UNKNOWN")
                     cname = comp.get("name", "?")
@@ -152,20 +146,50 @@ class Waveshare2in13V3Display(DisplayBackend):
                     cname = comp.name
                 comp_icon = _STATUS_ICONS.get(cstatus, "[?]")
                 text = str(cname)
-                if len(text) > 28:
-                    text = text[:25] + "..."
-                self._draw.text((margin + 8, start_y), comp_icon, fill=0)
-                self._draw.text((margin + 28, start_y), text, fill=0)
-                start_y += line_h
+                if len(text) > 14:
+                    text = text[:11] + "..."
+                self._draw.text((margin + 8, y), comp_icon, fill=0)
+                self._draw.text((margin + 30, y), text, fill=0)
+                y += line_h
 
-        # Footer
-        start_y = img_h - line_h - 2
+        footer_y = self._height - line_h - 2
         footer = "ok" if state.get("last_refresh") else "no data"
         if state.get("stale"):
             footer += " | STALE"
-        self._draw.text((margin, start_y), footer, fill=0)
+        self._draw.text((margin, footer_y), footer, fill=0)
 
         self._push_to_epaper()
+
+    def render_image(self, img: Image.Image, full_refresh: bool = False) -> None:
+        """Render a PIL Image directly to the EPD.
+
+        Args:
+            img: PIL Image in mode '1', sized (width, height) = (122, 250).
+            full_refresh: Force a full/base refresh (resets partial refresh base).
+        """
+        if self._epd is None:
+            logger.warning("EPD not initialized, skipping render_image")
+            return
+
+        buf = self._epd.getbuffer(img)
+        self._update_count += 1
+
+        needs_full = (
+            full_refresh
+            or not self._base_set
+            or self._update_count % self._full_refresh_every == 0
+        )
+
+        try:
+            if needs_full:
+                self._epd.displayPartBaseImage(buf)
+                self._base_set = True
+                logger.debug(f"EPD full refresh (update #{self._update_count})")
+            else:
+                self._epd.displayPartial(buf)
+                logger.debug(f"EPD partial refresh (update #{self._update_count})")
+        except Exception as e:
+            logger.error(f"EPD render_image error: {e}", exc_info=True)
 
     def _push_to_epaper(self) -> None:
         if self._epd is None:
@@ -173,7 +197,8 @@ class Waveshare2in13V3Display(DisplayBackend):
             return
         try:
             buf = self._epd.getbuffer(self._img)
-            self._epd.display(buf)
+            self._epd.displayPartBaseImage(buf)
+            self._base_set = True
             self._update_count += 1
             logger.debug(f"EPD frame flushed (update #{self._update_count})")
         except Exception as e:
@@ -181,3 +206,13 @@ class Waveshare2in13V3Display(DisplayBackend):
 
     def flush(self) -> None:
         pass
+
+    def close(self) -> None:
+        """Put EPD to sleep. Only call on shutdown."""
+        if self._epd is not None:
+            try:
+                self._epd.sleep()
+                logger.info("EPD sleep OK")
+            except Exception as e:
+                logger.error(f"EPD sleep error: {e}")
+            self._epd = None

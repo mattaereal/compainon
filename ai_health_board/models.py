@@ -1,4 +1,5 @@
 """Data models for AI health board."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -9,6 +10,7 @@ from typing import Any, Dict, List, Optional
 
 class ServiceStatus(str, Enum):
     """Normalized service status."""
+
     OK = "OK"
     DEGRADED = "DEGRADED"
     DOWN = "DOWN"
@@ -27,6 +29,7 @@ class ServiceStatus(str, Enum):
 @dataclass
 class ComponentStatus:
     """Status of a single component."""
+
     name: str
     status: ServiceStatus
     upstream_status: Optional[Any] = None
@@ -45,6 +48,7 @@ class ComponentStatus:
 @dataclass
 class ProviderStatus:
     """Status of a provider and all of its components."""
+
     name: str
     provider_type: str
     status: ServiceStatus = ServiceStatus.UNKNOWN
@@ -69,8 +73,38 @@ class ProviderStatus:
 
 
 @dataclass
+class LotusHealthStatus:
+    """Status from the Lotus health endpoint."""
+
+    status: str = "unknown"
+    proxy: bool = False
+    pending: int = 0
+    last_checked: Optional[datetime] = None
+
+    @property
+    def mood(self) -> str:
+        if self.status == "ok" and self.pending == 0:
+            return "happy"
+        if self.status == "ok" and self.pending > 0:
+            return "working"
+        return "sad"
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "status": self.status,
+            "proxy": self.proxy,
+            "pending": self.pending,
+            "mood": self.mood,
+            "last_checked": (
+                self.last_checked.isoformat() if self.last_checked else None
+            ),
+        }
+
+
+@dataclass
 class AppState:
     """Application state cache."""
+
     last_refresh: Optional[datetime] = None
     providers: List[ProviderStatus] = field(default_factory=list)
     stale: bool = False

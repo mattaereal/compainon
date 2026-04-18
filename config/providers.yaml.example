@@ -1,5 +1,5 @@
 # Refresh interval in seconds (default: 300 = 5 minutes)
-refresh_seconds: 300
+refresh_seconds: 30
 
 # Timezone for timestamp display (e.g. UTC, America/New_York)
 timezone: UTC
@@ -9,13 +9,30 @@ display:
   # Backend: "mock" (PNG file), "waveshare_2in13_v3" (Waveshare 2.13" V3 e-paper)
   backend: mock
   # EPD native resolution (Waveshare 2.13" V3 = 122x250 portrait)
-  # The driver auto-rotates landscape images, so leave these as-is.
   width: 122
   height: 250
+  rotation: 0
   # Full refresh every N cycles to reduce ghosting (e-paper only)
   full_refresh_every_n_updates: 6
 
-# List of status providers to poll
+# Screen cycling configuration
+# Screens alternate on a timed rotation. Each screen has its own
+# poll_interval (how often to fetch fresh data) and display_duration
+# (how long to show the screen before cycling to the next).
+screens:
+  - name: health
+    type: health
+    poll_interval: 30
+    display_duration: 30
+
+  - name: tamagotchi
+    type: tamagotchi
+    poll_interval: 5
+    display_duration: 15
+    options:
+      url: https://lotus.therektgames.com/health
+
+# List of status providers to poll (used by the health screen)
 providers:
   - name: Claude
     type: statuspage
@@ -35,3 +52,8 @@ providers:
       - Conversations
       - Codex Web
       - Codex API
+
+  - name: Lotus
+    type: lotus_health
+    url: https://lotus.therektgames.com/health
+    components: []
