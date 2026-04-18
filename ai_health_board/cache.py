@@ -1,4 +1,5 @@
 """Simple file-based cache for last successful state."""
+
 import json
 import logging
 import os
@@ -35,10 +36,10 @@ def save_cache(data: Dict[str, Any]) -> None:
     try:
         with open(tmp, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, default=str)
-        # Ensure written before rename (atomic on POSIX)
-        f.flush()
-        os.fsync(f.fileno())
+            f.flush()
+            os.fsync(f.fileno())
         os.replace(tmp, CACHE_FILE)
+        logger.debug("Cache saved successfully")
     except OSError as e:
         logger.warning(f"Failed to write cache: {e}")
         if os.path.exists(tmp):

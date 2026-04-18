@@ -1,6 +1,7 @@
 """Atlassian Statuspage adapter."""
+
 import logging
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from .base import StatusProvider, ServiceStatus
 
@@ -30,9 +31,19 @@ class StatuspageProvider(StatusProvider):
         self.url = url
         self.component_keys = component_keys
 
-    async def fetch_status(self, session: Any) -> Dict[str, Any]:
+    async def fetch_status(self, session: Any, timeout: int = 10) -> Dict[str, Any]:
+        """Fetch status from Statuspage API.
+
+        Args:
+            session: aiohttp ClientSession
+            timeout: Request timeout in seconds (default: 10)
+
+        Returns:
+            Parsed JSON response
+        """
         import aiohttp
-        resp = await session.get(self.url, timeout=10)
+
+        resp = await session.get(self.url, timeout=aiohttp.ClientTimeout(total=timeout))
         resp.raise_for_status()
         return await resp.json()
 

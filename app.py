@@ -4,7 +4,7 @@
 import asyncio
 import logging
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
 from ai_health_board.config import load_config, AppConfig
@@ -50,7 +50,7 @@ def build_state(config: AppConfig) -> None:
                 resolved.append(r)
 
         state = AppState(
-            last_refresh=datetime.utcnow(),
+            last_refresh=datetime.now(timezone.utc),
             providers=[r for r in resolved if r is not None],
             stale=False,
         )
