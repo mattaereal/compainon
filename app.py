@@ -17,6 +17,7 @@ from ai_health_board.screens.base import Screen
 from ai_health_board.screens.status_board import StatusBoardScreen, CategoryData
 from ai_health_board.screens.tamagotchi import TamagotchiScreen
 from ai_health_board.scheduler import screen_loop
+from ai_health_board.input import InputManager
 from ai_health_board.models import ServiceStatus
 
 logger = logging.getLogger(__name__)
@@ -245,6 +246,38 @@ def main() -> None:
         except ImportError:
             print("waveshare_epd V3: NOT INSTALLED")
 
+        try:
+            import subprocess
+
+            result = subprocess.run(
+                ["pgrep", "-x", "pisugar-server"],
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode == 0:
+                print("pisugar-server: RUNNING")
+            else:
+                print("pisugar-server: NOT RUNNING")
+        except Exception:
+            print("pisugar-server: UNKNOWN")
+
+        try:
+            sock_path = "/tmp/pisugar-server.sock"
+            if os.path.exists(sock_path):
+                print(f"PiSugar socket: {sock_path} EXISTS")
+            else:
+                print("PiSugar socket: NOT FOUND")
+        except Exception:
+            pass
+
+        pid_file = "/tmp/lotus-companion.pid"
+        if os.path.exists(pid_file):
+            with open(pid_file) as f:
+                pid = f.read().strip()
+            print(f"lotus-companion PID: {pid}")
+        else:
+            print("lotus-companion PID: NOT SET")
+
         print("\n=== End Doctor ===")
         return
 
@@ -279,17 +312,23 @@ def main() -> None:
         logger.info("Starting screen-cycling loop")
         display = get_display(cfg.display)
         screens = create_screens(cfg)
+        input_mgr = InputManager(screens)
 
         if args.once_after:
             logger.info(f"Initial delay {args.once_after}s before first refresh")
             time.sleep(args.once_after)
 
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        input_mgr.setup(loop)
         try:
-            asyncio.run(screen_loop(screens, display))
+            loop.run_until_complete(screen_loop(screens, display, input_mgr))
         except KeyboardInterrupt:
             logger.info("Shutting down")
         finally:
+            input_mgr.cleanup()
             display.close()
+            loop.close()
         return
 
     parser.print_help()

@@ -79,6 +79,7 @@ Screens are defined in YAML config using templates. Two templates exist:
 ```
 ai_health_board/
   config.py              # Data classes + YAML loading (ScreenConfig, StatusBoardCategory, etc.)
+  input.py               # InputManager - PiSugar button signals (SIGUSR1/SIGUSR2), PID file
   screens/
     base.py              # Screen ABC (fetch, render, poll_interval, display_duration, has_changed)
     status_board.py      # Status board template + pixel art icon generators
@@ -90,11 +91,39 @@ ai_health_board/
   providers/
     base.py              # StatusProvider ABC
     statuspage.py        # Atlassian Statuspage adapter
-  scheduler.py           # Async screen-cycling loop
+  scheduler.py           # Async screen-cycling loop with input interruption
   models.py              # ServiceStatus, ComponentStatus, ProviderStatus, AppState
 app.py                   # CLI entrypoint (run, once, preview, demo, doctor)
 config/providers.yaml    # Active config (mock backend)
 ```
+
+### PiSugar Button Integration
+
+The PiSugar S battery has a physical button controlled via `pisugar-server` (I2C). The app uses Unix signals for button-driven screen control:
+
+| Button | Signal | Action |
+|---|---|---|
+| Single tap | SIGUSR1 | Skip to next screen immediately |
+| Double tap | SIGUSR2 | Jump directly to tamagotchi screen |
+| Long press | (PiSugar default) | Safe shutdown |
+
+How it works:
+1. On startup, `InputManager` writes the process PID to `/tmp/lotus-companion.pid`
+2. `pisugar-server` button shell commands send signals to that PID
+3. The scheduler's sleep is interruptible -- it wakes immediately on signal events
+4. On shutdown, the PID file is cleaned up
+
+Configuring the PiSugar button (on Pi, after installing pisugar-server):
+```bash
+echo "set_button_enable single 1" | nc -q 0 127.0.0.1 8423
+echo "set_button_enable double 1" | nc -q 0 127.0.0.1 8423
+echo "set_button_shell single 'kill -USR1 \$(cat /tmp/lotus-companion.pid)'" | nc -q 0 127.0.0.1 8423
+echo "set_button_shell double 'kill -USR2 \$(cat /tmp/lotus-companion.pid)'" | nc -q 0 127.0.0.1 8423
+```
+
+This is also automated in `scripts/install.sh`.
+
+Testing without PiSugar hardware: `kill -USR1 $(cat /tmp/lotus-companion.pid)` and `kill -USR2 ...` work on any Linux.
 
 ### Display Dimensions
 
@@ -116,13 +145,14 @@ The scheduler always renders when switching screens. `has_changed()` only gates 
 python -m pytest tests/ -v
 ```
 
-All 54 tests should pass. Tests cover:
+All 78 tests should pass. Tests cover:
 - Config loading and data classes
 - Screen rendering (status board + tamagotchi)
 - Provider normalization (statuspage)
 - Pixel art icon generation
 - Mood resolution and info line formatting
 - Mock data injection for demo mode
+- InputManager (PID file, signal handling, interruptible sleep)
 
 ## Config Format
 

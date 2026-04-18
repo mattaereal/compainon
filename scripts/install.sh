@@ -89,6 +89,35 @@ if $IS_PI; then
     echo "Important: Set GPIO pin factory for Trixie/Bookworm:"
     echo "  export GPIOZERO_PIN_FACTORY=lgpio"
     echo "  (Add to ~/.bashrc or set in systemd service)"
+
+    # PiSugar button configuration
+    echo ""
+    echo "=== PiSugar Button Configuration ==="
+    if command -v nc &>/dev/null; then
+        if [[ -e /tmp/pisugar-server.sock ]] || pgrep -x pisugar-server &>/dev/null; then
+            echo "Configuring PiSugar button events..."
+            # Enable single and double tap
+            echo "set_button_enable single 1" | nc -q 0 127.0.0.1 8423 2>/dev/null && echo "  Single tap: ENABLED" || echo "  Single tap: FAILED (pisugar-server not responding?)"
+            echo "set_button_enable double 1" | nc -q 0 127.0.0.1 8423 2>/dev/null && echo "  Double tap: ENABLED" || echo "  Double tap: FAILED"
+            # Set button shell commands
+            echo "set_button_shell single 'kill -USR1 \$(cat /tmp/lotus-companion.pid)'" | nc -q 0 127.0.0.1 8423 2>/dev/null && echo "  Single tap -> next screen (SIGUSR1)" || echo "  Single tap shell: FAILED"
+            echo "set_button_shell double 'kill -USR2 \$(cat /tmp/lotus-companion.pid)'" | nc -q 0 127.0.0.1 8423 2>/dev/null && echo "  Double tap -> tamagotchi (SIGUSR2)" || echo "  Double tap shell: FAILED"
+            # Verify
+            echo ""
+            echo "Current button config:"
+            echo "get button_shell single" | nc -q 0 127.0.0.1 8423 2>/dev/null
+            echo "get button_shell double" | nc -q 0 127.0.0.1 8423 2>/dev/null
+        else
+            echo "pisugar-server not running. Button not configured."
+            echo "Install PiSugar power manager:"
+            echo "  wget -O pisugar-power-manager.sh https://cdn.pisugar.com/release/pisugar-power-manager.sh"
+            echo "  bash pisugar-power-manager.sh -c release"
+            echo ""
+            echo "Then re-run this installer to configure button events."
+        fi
+    else
+        echo "nc (netcat) not found. Install with: sudo apt install -y netcat-openbsd"
+    fi
 fi
 
 # Copy example config if missing
