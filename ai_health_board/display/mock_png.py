@@ -8,10 +8,17 @@ from typing import Any, Dict, List, Union
 from PIL import Image, ImageDraw
 
 from ..display.base import DisplayBackend
-from ..models import ProviderStatus
+from ..models import ProviderStatus, ServiceStatus
 from ..config import DisplayConfig
 
 logger = logging.getLogger(__name__)
+
+_STATUS_ICONS = {
+    "OK": "[OK]",
+    "DEGRADED": "[!]",
+    "DOWN": "[X]",
+    "UNKNOWN": "[?]",
+}
 
 
 def _get_display_value(
@@ -21,6 +28,21 @@ def _get_display_value(
     if isinstance(config, DisplayConfig):
         return getattr(config, key, default)
     return config.get(key, default)
+
+
+def _norm_providers(raw: List[Any]) -> List[Dict[str, Any]]:
+    """Normalize providers to dicts whether they come from objects or JSON."""
+    result = []
+    for p in raw:
+        if isinstance(p, dict):
+            result.append(p)
+        else:
+            result.append(p.to_dict())
+    return result
+
+
+def _provider_field(provider: Dict[str, Any], field: str, default: str = "") -> str:
+    return provider.get(field, default)
 
 
 class MockPNGDisplay(DisplayBackend):
@@ -78,22 +100,30 @@ class MockPNGDisplay(DisplayBackend):
         start_y += line_h + 4
 
         # Providers
-        providers: List[ProviderStatus] = state.get("providers", [])
+        providers = _norm_providers(state.get("providers", []))
         for provider in providers:
-            self._draw.text(
-                (col_x, start_y), f"[{provider.provider_type.upper()}]", fill=0
-            )
-            self._draw.text((col_x + 60, start_y), provider.name, fill=0)
-            agg_icon = provider.status.icon()
+            ptype = _provider_field(provider, "provider_type", "?").upper()
+            pname = _provider_field(provider, "name", "?")
+            pstatus = _provider_field(provider, "status", "UNKNOWN")
+            agg_icon = _STATUS_ICONS.get(pstatus, "[?]")
+            self._draw.text((col_x, start_y), f"[{ptype}]", fill=0)
+            self._draw.text((col_x + 60, start_y), pname, fill=0)
             self._draw.text((col_x + 160, start_y), agg_icon, fill=0)
             start_y += line_h
 
             # Components
-            for comp in provider.components:
-                self._draw.text((col_x + 10, start_y), comp.status.icon(), fill=0)
-                text = f"{comp.name}"
+            for comp in provider.get("components", []):
+                if isinstance(comp, dict):
+                    cstatus = comp.get("status", "UNKNOWN")
+                    cname = comp.get("name", "?")
+                else:
+                    cstatus = comp.status.value
+                    cname = comp.name
+                comp_icon = _STATUS_ICONS.get(cstatus, "[?]")
+                text = str(cname)
                 if len(text) > 30:
                     text = text[:27] + "..."
+                self._draw.text((col_x + 10, start_y), comp_icon, fill=0)
                 self._draw.text((col_x + 30, start_y), text, fill=0)
                 start_y += line_h
 
