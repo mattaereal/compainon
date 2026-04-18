@@ -9,20 +9,12 @@ logger = logging.getLogger(__name__)
 
 _BACKENDS: Dict[str, Any] = {
     "mock": "ai_health_board.display.mock_png.MockPNGDisplay",
-    "waveshare_2in13": "ai_health_board.display.waveshare_2in13.Waveshare2in13Display",
+    "waveshare_2in13_v3": "ai_health_board.display.waveshare_2in13.Waveshare2in13V3Display",
 }
 
 
 def get_display(config: Union[DisplayConfig, Dict[str, Any]]) -> Any:
-    """Get a display backend by name from config.
-
-    Args:
-        config: Either a DisplayConfig object or a dict with display settings
-
-    Returns:
-        Instantiated display backend
-    """
-    # Handle both DisplayConfig objects and dicts
+    """Get a display backend by name from config."""
     if isinstance(config, DisplayConfig):
         backend_name = config.backend
     else:

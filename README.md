@@ -1,56 +1,47 @@
 # AI Health Status Board
 
-A small Python application for Raspberry Pi that displays AI service status on an e-paper display.
+A small Python application for Raspberry Pi that displays AI service status on a 2.13" e-paper display.
 
 ## What it does
 
-Polls public health/status endpoints for AI services and renders a clean status dashboard on a 2.13" e-paper display (Waveshare-compatible). Supports easy extension via YAML configuration and a plugin adapter architecture.
+Polls public health/status endpoints for AI services and renders a clean status dashboard on a Waveshare 2.13" V3 e-paper display. Supports extension via YAML config and plugin adapters.
 
 ## Supported hardware
 
-- Raspberry Pi Zero / Pi Zero 2 W (or any Pi with SPI)
-- 2.13" e-paper display (Waveshare black/white panel, SPI)
-- Mock PNG backend for testing on laptops (no hardware required)
+- Raspberry Pi Zero 2 W / Pi 3 / Pi 4 / Pi 5 (with SPI)
+- Waveshare 2.13" V3 e-paper display (black/white, 122x250)
+- Mock PNG backend for development on laptops
 
-## Dependencies
-
-- Python 3.11+
-- `aiohttp` - Async HTTP client
-- `pillow` - Image rendering
-- `pyyaml` - Configuration parsing
-- `waveshare_epd` - E-paper driver (install manually, see below)
-
-## Quick start on Raspberry Pi
-
-### 1. Copy the repository to your Pi
+## Quick start on a laptop (mock mode)
 
 ```bash
-# From your development machine
-scp -r ai-health-board pi@raspberrypi.local:~/
-ssh pi@raspberrypi.local
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+cp config/providers.yaml.example config/providers.yaml
+python app.py preview
+# Output: ./out/frame.png
 ```
 
-### 2. Enable SPI interface
+## Raspberry Pi setup
+
+### 1. Install system packages
+
+Raspberry Pi OS Trixie (64-bit) uses the character device GPIO interface, not the deprecated sysfs interface. You must install `lgpio`:
+
+```bash
+sudo apt update
+sudo apt install -y python3-lgpio python3-spidev python3-rpi.gpio python3-pip python3-setuptools
+```
+
+### 2. Enable SPI
 
 ```bash
 sudo raspi-config
 # -> Interface Options -> SPI -> Enable -> Finish -> Reboot
 ```
 
-### 3. Install the application
-
-```bash
-cd ~/ai-health-board
-./scripts/install.sh
-```
-
-This will:
-- Create a Python virtual environment
-- Install dependencies (aiohttp, pillow, pyyaml)
-- Copy example configuration
-- Run doctor check to verify environment
-
-### 4. Install Waveshare e-paper driver (for hardware display)
+### 3. Install Waveshare e-paper driver
 
 ```bash
 cd ~
@@ -59,47 +50,62 @@ cd e-Paper/RaspberryPi_JetsonNano/python
 sudo python3 setup.py install
 ```
 
-### 5. Configure for your display
+### 4. Add user to GPIO/SPI groups
+
+```bash
+sudo usermod -a -G spi,gpio $USER
+# Log out and back in for group changes to take effect
+```
+
+### 5. Set GPIO pin factory
+
+Required on Trixie/Bookworm so gpiozero uses `lgpio` instead of the deprecated sysfs:
+
+```bash
+export GPIOZERO_PIN_FACTORY=lgpio
+# Add to ~/.bashrc for persistence:
+echo 'export GPIOZERO_PIN_FACTORY=lgpio' >> ~/.bashrc
+```
+
+### 6. Copy repo and install
+
+```bash
+# From your dev machine:
+scp -r ai-health-board pi@raspberrypi.local:~/
+
+# On the Pi:
+cd ~/ai-health-board
+python3 -m venv --system-site-packages venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
+
+**Important:** The venv MUST be created with `--system-site-packages` so the app can access `lgpio`, `spidev`, and `waveshare_epd` installed at the system level.
+
+### 7. Configure for e-paper display
 
 Edit `config/providers.yaml`:
 
 ```yaml
-# For mock/PNG testing (no hardware needed)
 display:
-  backend: mock
-
-# For actual e-paper display
-display:
-  backend: waveshare_2in13
-  width: 250
-  height: 122
-  rotation: 0
+  backend: waveshare_2in13_v3  # Change from 'mock'
+  width: 122
+  height: 250
+  full_refresh_every_n_updates: 6
 ```
 
-### 6. Test the installation
+### 8. Test
 
 ```bash
-# Test in mock mode (generates out/frame.png)
 source venv/bin/activate
-python app.py preview
-
-# Test with actual display (requires waveshare_epd)
+export GPIOZERO_PIN_FACTORY=lgpio
 python app.py once
 ```
 
-### 7. Install as systemd service
-
-Edit `systemd/ai-health-board.service` if your username is not `pi` or if you installed to a different path:
-
-```ini
-User=yourusername
-WorkingDirectory=/home/yourusername/ai-health-board
-ExecStart=/home/yourusername/ai-health-board/venv/bin/python ...
-```
-
-Then install:
+### 9. Install as systemd service
 
 ```bash
+# Edit the service file to match your username/path if not 'pi'
 sudo cp systemd/ai-health-board.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable ai-health-board
@@ -111,19 +117,14 @@ View logs:
 sudo journalctl -u ai-health-board -f
 ```
 
-## Running in mock mode on a laptop
+## CLI Commands
 
 ```bash
-python -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-cp config/providers.yaml.example config/providers.yaml
-
-# Ensure mock backend is selected in config
-grep "backend:" config/providers.yaml  # should show 'backend: mock'
-
-python app.py preview
-# Output: ./out/frame.png
+python app.py doctor        # Check environment and dependencies
+python app.py preview       # Render one frame to PNG (mock mode)
+python app.py once          # Fetch and display once, then exit
+python app.py run           # Long-running service loop
+python app.py run --once-after 30  # Wait 30s before first refresh
 ```
 
 ## Configuring providers
@@ -134,10 +135,9 @@ Edit `config/providers.yaml`:
 refresh_seconds: 300
 timezone: UTC
 display:
-  backend: waveshare_2in13
-  width: 250
-  height: 122
-  rotation: 0
+  backend: waveshare_2in13_v3
+  width: 122
+  height: 250
   full_refresh_every_n_updates: 6
 
 providers:
@@ -153,29 +153,26 @@ providers:
     type: statuspage
     url: https://status.openai.com/api/v2/summary.json
     components:
-      - ChatGPT
-      - API
+      - App
+      - Conversations
       - Codex Web
       - Codex API
 ```
 
-Matching is resilient:
+Component name matching:
 1. Exact match first
 2. Case-insensitive fallback
 3. If not found -> UNKNOWN (logged as warning)
 
 ## Adding a new provider adapter
 
-1. Create a new file in `ai_health_board/providers/` (e.g., `custom.py`)
-2. Implement the `StatusProvider` base class
-3. Register it in `ai_health_board/providers/__init__.py`
-4. Add entries to your `config/providers.yaml`
-
-Example adapter:
+1. Create `ai_health_board/providers/custom.py`
+2. Implement `StatusProvider` base class
+3. Register in `ai_health_board/providers/__init__.py`
+4. Add entries to `config/providers.yaml`
 
 ```python
 from ai_health_board.providers.base import StatusProvider, ServiceStatus
-from ai_health_board.models import ComponentStatus
 from typing import Any, Dict
 
 class CustomProvider(StatusProvider):
@@ -190,82 +187,63 @@ class CustomProvider(StatusProvider):
     def display_name(self) -> str:
         return self._display_name
 
-    async def fetch_status(self, session) -> Dict[str, Any]:
-        # Fetch from your custom endpoint
-        resp = await session.get(self.url, timeout=10)
+    async def fetch_status(self, session, timeout=10) -> Dict[str, Any]:
+        resp = await session.get(self.url, timeout=aiohttp.ClientTimeout(total=timeout))
+        resp.raise_for_status()
         return await resp.json()
 
     def normalize(self, raw: Dict[str, Any]) -> Dict[str, ServiceStatus]:
-        # Map your API response to ServiceStatus
-        return {"service_name": ServiceStatus.OK}
-```
-
-Then register in `ai_health_board/providers/__init__.py`:
-
-```python
-_BACKENDS = {
-    "statuspage": "...",
-    "custom": "ai_health_board.providers.custom.CustomProvider",
-}
-```
-
-## CLI Commands
-
-```bash
-python app.py doctor        # Check environment and dependencies
-python app.py preview       # Render one frame to PNG (mock mode)
-python app.py once          # Fetch and display once, then exit
-python app.py run           # Long-running service loop
-python app.py run --once-after 30  # Wait 30s before first refresh
+        return {"service": ServiceStatus.OK}
 ```
 
 ## Troubleshooting
 
-### Doctor check fails
-
-Run `./scripts/doctor.sh` to diagnose:
-
+### `ModuleNotFoundError: No module named 'lgpio'`
 ```bash
-./scripts/doctor.sh
+sudo apt install python3-lgpio
 ```
 
-Common issues:
-- **SPI not enabled**: Run `sudo raspi-config`, enable SPI, reboot
-- **waveshare_epd missing**: Install from Waveshare's GitHub repo
-- **Missing dependencies**: Run `./scripts/install.sh`
+### `PinFactoryFallback: Falling back from lgpio`
+The `GPIOZERO_PIN_FACTORY` environment variable is not set:
+```bash
+export GPIOZERO_PIN_FACTORY=lgpio
+```
+
+### `OSError: [Errno 22] Invalid argument` on `/sys/class/gpio`
+You're on Trixie which removed the sysfs GPIO interface. Set:
+```bash
+export GPIOZERO_PIN_FACTORY=lgpio
+```
 
 ### Display not updating
+1. Check SPI: `ls /dev/spidev*`
+2. Check driver: `python3 -c "from waveshare_epd import epd2in13_V3"`
+3. Check config: `display.backend` should be `waveshare_2in13_v3`
+4. Check env: `echo $GPIOZERO_PIN_FACTORY` should be `lgpio`
+5. Try mock first: set `backend: mock`, run `python app.py preview`
 
-1. Check SPI is enabled: `ls /dev/spidev*`
-2. Check waveshare_epd is installed: `python3 -c "from waveshare_epd import epd2in13"`
-3. Check logs: `sudo journalctl -u ai-health-board -f`
-4. Try mock mode first: set `backend: mock` in config, run `python app.py preview`
-
-### HTTP fetch failures
-
-- Network connectivity: `ping status.claude.com`
-- Upstream outage: Check status pages in browser
-- Stale data: App retains last known state and marks as stale
-
-### Partial refresh issues
-
-E-paper displays ghost over time. The app performs a full refresh every N cycles (configurable via `full_refresh_every_n_updates` in display config).
+### venv can't find lgpio/spidev
+The venv was created without `--system-site-packages`. Recreate it:
+```bash
+rm -rf venv
+python3 -m venv --system-site-packages venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
 
 ## Security notes
 
-- Outbound-only HTTP polling (no inbound services required)
+- Outbound-only HTTP polling (no inbound services)
 - No secrets required for public status endpoints
-- SSH keys recommended for scp/deployment
-- Runs as unprivileged user by default
-- No database or web framework - minimal attack surface
+- SSH keys recommended for deployment
+- Runs as unprivileged user (must be in `spi` and `gpio` groups)
 
 ## Development
 
-Run tests:
 ```bash
 python -m pytest tests/ -v
 ```
 
 ## License
 
-MIT License - Internal use only.
+MIT License

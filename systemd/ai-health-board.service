@@ -4,12 +4,12 @@ After=network.target
 
 [Service]
 Type=simple
-# Change 'pi' to your username if different
 User=pi
 Group=pi
 WorkingDirectory=/home/pi/ai-health-board
 Environment="PATH=/home/pi/ai-health-board/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 Environment="PYTHONUNBUFFERED=1"
+Environment="GPIOZERO_PIN_FACTORY=lgpio"
 ExecStart=/home/pi/ai-health-board/venv/bin/python /home/pi/ai-health-board/app.py run --config /home/pi/ai-health-board/config/providers.yaml
 Restart=on-failure
 RestartSec=10

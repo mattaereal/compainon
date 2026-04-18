@@ -6,23 +6,22 @@ timezone: UTC
 
 # Display backend configuration
 display:
-  # Backend to use: "mock" (PNG output), "waveshare_2in13" (Waveshare 2.13")
+  # Backend: "mock" (PNG file), "waveshare_2in13_v3" (Waveshare 2.13" V3 e-paper)
   backend: mock
-  # Display dimensions (pixels)
-  width: 250
-  height: 122
-  # Rotation in degrees (0, 90, 180, 270)
-  rotation: 90
-  # Do a full refresh every N update cycles to reduce ghosting
+  # EPD native resolution (Waveshare 2.13" V3 = 122x250 portrait)
+  # The driver auto-rotates landscape images, so leave these as-is.
+  width: 122
+  height: 250
+  # Full refresh every N cycles to reduce ghosting (e-paper only)
   full_refresh_every_n_updates: 6
 
 # List of status providers to poll
 providers:
-  # Example: Atlassian Statuspage provider
   - name: Claude
     type: statuspage
     url: https://status.claude.com/api/v2/summary.json
-    # Optional: restrict to specific components (resilient matching)
+    # Component names from the upstream Statuspage
+    # (case-insensitive fallback is applied automatically)
     components:
       - claude.ai
       - Claude Code
@@ -31,8 +30,6 @@ providers:
   - name: OpenAI
     type: statuspage
     url: https://status.openai.com/api/v2/summary.json
-    # Component names must match the upstream Statuspage exactly
-    # (case-insensitive fallback is applied automatically)
     components:
       - App
       - Conversations

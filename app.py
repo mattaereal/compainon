@@ -148,6 +148,12 @@ def main() -> None:
         except ImportError:
             print("aiohttp: MISSING (install with: pip install aiohttp)")
 
+        # GPIO pin factory (required on Trixie/Bookworm)
+        gpio_factory = os.environ.get("GPIOZERO_PIN_FACTORY", "")
+        print(f"GPIOZERO_PIN_FACTORY: {gpio_factory or 'NOT SET'}")
+        if not gpio_factory:
+            print("  Set: export GPIOZERO_PIN_FACTORY=lgpio")
+
         # SPI detection
         print("")
         spi_devs = ["/dev/spidev0.0", "/dev/spidev0.1"]
@@ -160,20 +166,26 @@ def main() -> None:
                 print(f"SPI device: {d} – NOT FOUND")
 
         if not spi_found:
-            print("\n[WARNING] No SPI devices found!")
-            print("Enable SPI on Raspberry Pi OS:")
-            print("  sudo raspi-config -> Interface Options -> SPI -> Enable -> Reboot")
+            print("  Enable: sudo raspi-config -> Interface Options -> SPI -> Enable")
 
-        # Waveshare check
+        # lgpio check (required on Trixie)
         try:
-            from waveshare_epd import epd2in13
+            import lgpio
 
-            print("\nwaveshare_epd: INSTALLED (e-paper hardware ready)")
+            print(f"\nlgpio: {lgpio.__version__}")
         except ImportError:
-            print("\nwaveshare_epd: NOT INSTALLED")
-            print("To install for e-paper display:")
+            print("\nlgpio: MISSING (sudo apt install python3-lgpio)")
+
+        # Waveshare V3 driver check
+        try:
+            from waveshare_epd import epd2in13_V3
+
+            print("waveshare_epd V3: INSTALLED")
+        except ImportError:
+            print("waveshare_epd V3: NOT INSTALLED")
             print("  git clone https://github.com/waveshareteam/e-Paper.git")
             print("  cd e-Paper/RaspberryPi_JetsonNano/python")
+            print("  sudo apt install -y python3-setuptools")
             print("  sudo python3 setup.py install")
 
         print("\n=== End Doctor ===")
