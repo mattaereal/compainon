@@ -4,7 +4,7 @@ After=multi-user.target
 
 [Service]
 Type=simple
-ExecStart=/home/pi/lotus-companion/venv/bin/python3 /home/pi/lotus-companion/scripts/pisugar_button.py
+ExecStart=/usr/bin/python3 %h/lotus-companion/scripts/pisugar_button.py
 Environment=GPIOZERO_PIN_FACTORY=lgpio
 Restart=on-failure
 RestartSec=5
