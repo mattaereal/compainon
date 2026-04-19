@@ -99,31 +99,39 @@ config/providers.yaml    # Active config (mock backend)
 
 ### PiSugar Button Integration
 
-The PiSugar S battery has a physical button controlled via `pisugar-server` (I2C). The app uses Unix signals for button-driven screen control:
+The PiSugar S battery has a physical button connected to **GPIO3 (pin 5)**. A standalone button daemon reads GPIO3 directly via `gpiozero` -- no I2C or `pisugar-server` required.
 
-| Button | Signal | Action |
-|---|---|---|
-| Single tap | SIGUSR1 | Skip to next screen immediately |
-| Double tap | SIGUSR2 | Jump directly to tamagotchi screen |
-| Long press | (PiSugar default) | Safe shutdown |
+| Button | Action |
+|---|---|
+| Short press (< 1.2s) | Next screen (sends SIGUSR1 to lotus-companion) |
+| Long press (>= 1.2s) | Shutdown screen + `sudo shutdown -h now` |
+
+Files:
+- `scripts/pisugar_button.py` - Button daemon (gpiozero, GPIO3, pull-up, debounce)
+- `systemd/pisugar-button.service` - Systemd service
 
 How it works:
-1. On startup, `InputManager` writes the process PID to `/tmp/lotus-companion.pid`
-2. `pisugar-server` button shell commands send signals to that PID
-3. The scheduler's sleep is interruptible -- it wakes immediately on signal events
-4. On shutdown, the PID file is cleaned up
+1. `pisugar_button.py` runs as a separate daemon, listening on GPIO3 via gpiozero
+2. On short press, it reads `/tmp/lotus-companion.pid` and sends SIGUSR1 to the main app
+3. On long press, it attempts a shutdown screen update, then runs `sudo shutdown -h now`
+4. The main app's `InputManager` receives SIGUSR1 and interrupts the scheduler to switch screens
 
-Configuring the PiSugar button (on Pi, after installing pisugar-server):
+Important (on Pi):
+- **Disable I2C** if `pisugar-server` is running -- it can interfere with GPIO3
+- **Set `GPIOZERO_PIN_FACTORY=lgpio`** (required on Trixie)
+- Install: `sudo apt install python3-gpiozero python3-lgpio`
+
+Installing the button daemon:
 ```bash
-echo "set_button_enable single 1" | nc -q 0 127.0.0.1 8423
-echo "set_button_enable double 1" | nc -q 0 127.0.0.1 8423
-echo "set_button_shell single 'kill -USR1 \$(cat /tmp/lotus-companion.pid)'" | nc -q 0 127.0.0.1 8423
-echo "set_button_shell double 'kill -USR2 \$(cat /tmp/lotus-companion.pid)'" | nc -q 0 127.0.0.1 8423
+sudo cp systemd/pisugar-button.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable pisugar-button
+sudo systemctl start pisugar-button
 ```
 
-This is also automated in `scripts/install.sh`.
+View logs: `sudo journalctl -u pisugar-button -f`
 
-Testing without PiSugar hardware: `kill -USR1 $(cat /tmp/lotus-companion.pid)` and `kill -USR2 ...` work on any Linux.
+Testing without PiSugar hardware: `kill -USR1 $(cat /tmp/lotus-companion.pid)` works on any Linux.
 
 ### Display Dimensions
 

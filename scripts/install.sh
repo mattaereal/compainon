@@ -90,35 +90,24 @@ if $IS_PI; then
     echo "  export GPIOZERO_PIN_FACTORY=lgpio"
     echo "  (Add to ~/.bashrc or set in systemd service)"
 
-    # PiSugar button configuration
+    # PiSugar button daemon (GPIO3 direct input)
     echo ""
-    echo "=== PiSugar Button Configuration ==="
-    if command -v nc &>/dev/null; then
-        if [[ -e /tmp/pisugar-server.sock ]] || pgrep -x pisugar-server &>/dev/null; then
-            echo "Configuring PiSugar button events..."
-            # Enable single and double tap
-            echo "set_button_enable single 1" | nc -q 0 127.0.0.1 8423 2>/dev/null && echo "  Single tap: ENABLED" || echo "  Single tap: FAILED (pisugar-server not responding?)"
-            echo "set_button_enable double 1" | nc -q 0 127.0.0.1 8423 2>/dev/null && echo "  Double tap: ENABLED" || echo "  Double tap: FAILED"
-            echo "set_anti_mistouch 1" | nc -q 0 127.0.0.1 8423 2>/dev/null && echo "  Anti-mistouch: ENABLED" || echo "  Anti-mistouch: FAILED"
-            # Set button shell commands
-            echo "set_button_shell single 'kill -USR1 \$(cat /tmp/lotus-companion.pid)'" | nc -q 0 127.0.0.1 8423 2>/dev/null && echo "  Single tap -> next screen (SIGUSR1)" || echo "  Single tap shell: FAILED"
-            echo "set_button_shell double 'kill -USR2 \$(cat /tmp/lotus-companion.pid)'" | nc -q 0 127.0.0.1 8423 2>/dev/null && echo "  Double tap -> tamagotchi (SIGUSR2)" || echo "  Double tap shell: FAILED"
-            # Verify
-            echo ""
-            echo "Current button config:"
-            echo "get button_shell single" | nc -q 0 127.0.0.1 8423 2>/dev/null
-            echo "get button_shell double" | nc -q 0 127.0.0.1 8423 2>/dev/null
-        else
-            echo "pisugar-server not running. Button not configured."
-            echo "Install PiSugar power manager:"
-            echo "  wget -O pisugar-power-manager.sh https://cdn.pisugar.com/release/pisugar-power-manager.sh"
-            echo "  bash pisugar-power-manager.sh -c release"
-            echo ""
-            echo "Then re-run this installer to configure button events."
-        fi
+    echo "=== PiSugar Button Daemon ==="
+    if python3 -c "from gpiozero import Button" 2>/dev/null; then
+        echo "gpiozero: OK"
     else
-        echo "nc (netcat) not found. Install with: sudo apt install -y netcat-openbsd"
+        echo "gpiozero: MISSING"
+        echo "  sudo apt install -y python3-gpiozero"
     fi
+
+    echo ""
+    echo "PiSugar S button is connected to GPIO3 (pin 5)."
+    echo "The button daemon reads GPIO3 directly (no I2C needed)."
+    echo ""
+    echo "Disable I2C if pisugar-server is interfering:"
+    echo "  sudo raspi-config -> Interface Options -> I2C -> Disable"
+    echo "  sudo systemctl stop pisugar-server 2>/dev/null"
+    echo "  sudo systemctl disable pisugar-server 2>/dev/null"
 fi
 
 # Copy example config if missing
@@ -147,12 +136,14 @@ if $IS_PI; then
     echo "  2. export GPIOZERO_PIN_FACTORY=lgpio"
     echo "  3. python app.py once"
     echo ""
-    echo "Install systemd service:"
+    echo "Install systemd services:"
     echo "  sudo cp systemd/ai-health-board.service /etc/systemd/system/"
+    echo "  sudo cp systemd/pisugar-button.service /etc/systemd/system/"
     echo "  sudo systemctl daemon-reload"
-    echo "  sudo systemctl enable ai-health-board"
-    echo "  sudo systemctl start ai-health-board"
+    echo "  sudo systemctl enable ai-health-board pisugar-button"
+    echo "  sudo systemctl start ai-health-board pisugar-button"
     echo ""
     echo "View logs:"
     echo "  sudo journalctl -u ai-health-board -f"
+    echo "  sudo journalctl -u pisugar-button -f"
 fi
