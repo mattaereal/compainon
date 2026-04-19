@@ -84,8 +84,16 @@ Screens are defined in YAML config using templates:
    - Configurable sprites (idle/working/error/success) from PNG files
    - `mood_map` defines which JSON field drives sprite selection
    - `info_lines` define what data appears below the sprite
+   - `stale_threshold` (seconds, default 120): if `last_heartbeat` is older than this, status is overwritten to `"offline"`
 
-3. **`ui:<name>`** - Any registered ui/ template (boot, setup, idle, error, message, etc.)
+3. **`agent_feed`** - Multi-agent compact list
+   - Reads multiple agent URLs in parallel (`agents` list in config)
+   - Each agent serves the Standard Agent Status JSON (see below)
+   - Renders a compact row per agent: icon + name + status + message
+   - Applies stale detection per-agent using `stale_threshold`
+   - Status icons: `[+]` idle/ok, `[!]` working/waiting_input, `[-]` error/stuck/offline, `[*]` success
+
+4. **`ui:<name>`** - Any registered ui/ template (boot, setup, idle, error, message, etc.)
    - Wrapped as `UiTemplateScreen` for the scheduler
    - Can also use bare name (e.g. `template: idle`) if it matches a ui/ template
 
@@ -119,6 +127,7 @@ ai_health_board/
     base.py              # Screen ABC (fetch, render, poll_interval, display_duration, has_changed)
     status_board.py      # Status board template + pixel art icon generators
     tamagotchi.py         # Tamagotchi template (config-driven sprites, mood_map, info_lines)
+    agent_feed.py        # Agent feed template (multi-agent compact list)
     ui_template.py       # UiTemplateScreen - wraps ui/ templates as Screen instances
   display/
     base.py              # DisplayBackend ABC (render, render_image, flush, close)
@@ -200,6 +209,70 @@ V2/V3/V4/D e-papers support partial refresh (`displayPartial()`) for fast, flick
 V1 uses a different API: `init(PART_UPDATE)` + `display()` instead of `displayPartial()`.
 
 3-color (BC, B V3, B V4) and 4-color (G) displays do NOT support partial refresh.
+
+### Mood Map (Extended)
+
+The `mood_map` config has two modes:
+
+**Legacy** (binary ok/error):
+```yaml
+mood_map:
+  key: status
+  ok: idle
+  ok_busy: working
+  error: error
+```
+If `status == "ok"` and `pending > 0`, uses `ok_busy`; if `pending == 0`, uses `ok`; anything else uses `error`.
+
+**Explicit map** (recommended for agents):
+```yaml
+mood_map:
+  key: status
+  map:
+    idle: idle
+    working: working
+    waiting_input: working
+    stuck: error
+    error: error
+    success: success
+    offline: error
+  fallback: idle
+```
+When `map` is present, it takes precedence. The JSON field value is looked up in `map`; if not found, `fallback` is used. This supports arbitrary agent status strings.
+
+### Stale / Offline Detection
+
+Both `tamagotchi` and `agent_feed` screens support stale detection via `stale_threshold` (default: 120 seconds). After fetching JSON, if `last_heartbeat` is older than `stale_threshold` seconds, the agent's `status` is overwritten to `"offline"` and mood is re-resolved. This allows mood maps to render a distinct offline state.
+
+If the fetch itself fails (connection refused, timeout), `__fetch_error` is set and the screen shows `[-] connection error`.
+
+### Standard Agent Status JSON
+
+Any AI agent can feed its live status into the display by serving this JSON at an HTTP endpoint (e.g. `http://agent-host:7788/status`):
+
+```json
+{
+  "status": "working",
+  "message": "Refactoring auth module",
+  "pending": 0,
+  "started_at": "2026-04-19T10:30:00Z",
+  "last_heartbeat": "2026-04-19T10:35:22Z",
+  "metadata": {
+    "files_modified": 3,
+    "commands_run": 7,
+    "task": "implement-auth"
+  }
+}
+```
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `status` | string | Yes | One of: `idle`, `working`, `waiting_input`, `stuck`, `error`, `success` |
+| `last_heartbeat` | ISO 8601 | Yes | Timestamp of last update; used for stale/offline detection |
+| `message` | string | No | Current activity description (shown in agent_feed and info_lines) |
+| `pending` | int | No | Number of pending tasks (used by legacy mood_map ok_busy logic) |
+| `started_at` | ISO 8601 | No | When the current task started |
+| `metadata` | object | No | Freeform dict; accessible via dot-notation in info_lines (e.g. `metadata.files_modified`) |
 
 ## Testing
 

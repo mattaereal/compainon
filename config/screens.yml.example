@@ -91,3 +91,57 @@ screens:
       - label: Last
         key: last_action
         max_length: 18
+
+  # --- agent_feed: multi-agent status overview ---
+  # Shows multiple agents on one screen in compact rows.
+  # Each agent should serve the standard Agent Status JSON schema:
+  #   status (required): idle|working|waiting_input|stuck|error|success
+  #   last_heartbeat (required): ISO 8601 timestamp
+  #   message (optional): current activity description
+  #   pending (optional): number of pending tasks
+  #   metadata (optional): freeform dict, accessible via dot-notation
+  # - name: All Agents
+  #   template: agent_feed
+  #   poll_interval: 5
+  #   display_duration: 30
+  #   stale_threshold: 120
+  #   agents:
+  #     - name: OpenCode
+  #       url: http://192.168.1.50:7788/status
+  #     - name: Cursor
+  #       url: http://192.168.1.51:7788/status
+
+  # --- Per-agent tamagotchi with explicit mood map ---
+  # The `map` field maps JSON status values to sprite moods.
+  # If `map` is absent, the legacy ok/ok_busy/error logic is used.
+  # `fallback` is the mood used for unmapped status values.
+  # - name: OpenCode
+  #   template: tamagotchi
+  #   poll_interval: 5
+  #   display_duration: 15
+  #   url: http://192.168.1.50:7788/status
+  #   stale_threshold: 120
+  #   sprites:
+  #     idle: img/irk_1.png
+  #     working: img/irk_2.png
+  #     error: img/irk_3.png
+  #     success: img/irk_4.png
+  #   mood_map:
+  #     key: status
+  #     map:
+  #       idle: idle
+  #       working: working
+  #       waiting_input: working
+  #       stuck: error
+  #       error: error
+  #       success: success
+  #       offline: error
+  #     fallback: idle
+  #   info_lines:
+  #     - label: status
+  #       key: status
+  #     - label: task
+  #       key: message
+  #       max_length: 18
+  #     - label: files
+  #       key: metadata.files_modified

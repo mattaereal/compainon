@@ -70,6 +70,18 @@ class TamagotchiScreen(Screen):
         self._data = data
         self._resolve_mood()
 
+        stale_threshold = self._config.stale_threshold
+        heartbeat = self._data.get("last_heartbeat")
+        if heartbeat:
+            try:
+                dt = datetime.fromisoformat(heartbeat)
+                age = (datetime.now(timezone.utc) - dt).total_seconds()
+                if age > stale_threshold:
+                    self._data["status"] = "offline"
+                    self._resolve_mood()
+            except (ValueError, TypeError):
+                pass
+
     def _resolve_mood(self) -> None:
         mm = self._config.mood_map
         if not mm:
@@ -77,6 +89,11 @@ class TamagotchiScreen(Screen):
             return
 
         field_val = str(resolve_key(self._data, mm.key, "")).lower()
+
+        if mm.map:
+            self._mood = mm.map.get(field_val, mm.fallback)
+            return
+
         pending = resolve_key(self._data, "pending", 0)
 
         if field_val == "ok":

@@ -16,6 +16,7 @@ from ai_health_board.screens import create_screens
 from ai_health_board.screens.base import Screen
 from ai_health_board.screens.status_board import StatusBoardScreen, CategoryData
 from ai_health_board.screens.tamagotchi import TamagotchiScreen
+from ai_health_board.screens.agent_feed import AgentFeedScreen
 from ai_health_board.screens.ui_template import UiTemplateScreen
 from ai_health_board.scheduler import screen_loop
 from ai_health_board.input import InputManager
@@ -86,9 +87,32 @@ def _inject_mock_tamagotchi(screen: TamagotchiScreen) -> None:
         "commits_today": 6,
         "lines_changed": 2340,
         "last_action": "merged PR #142",
+        "last_heartbeat": datetime.now(timezone.utc).isoformat(),
         "__last_checked": datetime.now(timezone.utc).isoformat(),
     }
     screen._resolve_mood()
+
+
+def _inject_mock_agent_feed(screen: AgentFeedScreen) -> None:
+    screen._agents_data = [
+        {
+            "name": "OpenCode",
+            "status": "working",
+            "message": "Refactoring auth module",
+            "last_heartbeat": datetime.now(timezone.utc).isoformat(),
+        },
+        {
+            "name": "Cursor",
+            "status": "idle",
+            "last_heartbeat": datetime.now(timezone.utc).isoformat(),
+        },
+        {
+            "name": "Lotus",
+            "status": "success",
+            "message": "PR merged",
+            "last_heartbeat": datetime.now(timezone.utc).isoformat(),
+        },
+    ]
 
 
 def _demo(
@@ -117,6 +141,12 @@ def _demo(
                 time.sleep(0.3)
             final_path = "out/frame.png"
             img.save(final_path, format="PNG")
+
+        elif isinstance(screen, AgentFeedScreen):
+            _inject_mock_agent_feed(screen)
+            img = screen.render(display.width, display.height)
+            display.render_image(img)
+            print("  Agent feed rendered -> out/frame.png")
 
         else:
             if isinstance(screen, UiTemplateScreen):

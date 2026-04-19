@@ -3,6 +3,7 @@
 import sys
 import os
 import tempfile
+from datetime import datetime, timezone, timedelta
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -33,6 +34,7 @@ from ai_health_board.config import (
     SpriteConfig,
     MoodMapConfig,
     InfoLineConfig,
+    AgentFeedEntry,
     load_config,
     resolve_key,
 )
@@ -603,6 +605,257 @@ def test_mock_tamagotchi_injection():
     assert screen._data.get("status") == "ok"
     img = screen.render(122, 250)
     assert img.size == (122, 250)
+
+
+# --- MoodMapConfig with map ---
+
+
+def test_mood_map_with_explicit_map():
+    mm = MoodMapConfig(
+        key="status",
+        map={
+            "idle": "idle",
+            "working": "working",
+            "waiting_input": "working",
+            "stuck": "error",
+            "error": "error",
+            "success": "success",
+            "offline": "error",
+        },
+        fallback="idle",
+    )
+    assert mm.map["working"] == "working"
+    assert mm.map["offline"] == "error"
+    assert mm.fallback == "idle"
+
+
+def test_mood_map_explicit_takes_precedence():
+    sc = ScreenConfig(
+        name="Test",
+        template="tamagotchi",
+        url="http://test",
+        mood_map=MoodMapConfig(
+            key="status",
+            ok="idle",
+            ok_busy="working",
+            error="error",
+            map={"working": "working", "error": "error", "success": "success"},
+            fallback="idle",
+        ),
+    )
+    screen = TamagotchiScreen(sc)
+
+    screen._data = {"status": "working"}
+    screen._resolve_mood()
+    assert screen._mood == "working"
+
+    screen._data = {"status": "success"}
+    screen._resolve_mood()
+    assert screen._mood == "success"
+
+    screen._data = {"status": "idle"}
+    screen._resolve_mood()
+    assert screen._mood == "idle"
+
+
+def test_mood_map_without_map_legacy_behavior():
+    sc = ScreenConfig(
+        name="Test",
+        template="tamagotchi",
+        url="http://test",
+        mood_map=MoodMapConfig(
+            key="status",
+            ok="idle",
+            ok_busy="working",
+            error="error",
+        ),
+    )
+    screen = TamagotchiScreen(sc)
+
+    screen._data = {"status": "ok", "pending": 0}
+    screen._resolve_mood()
+    assert screen._mood == "idle"
+
+    screen._data = {"status": "ok", "pending": 3}
+    screen._resolve_mood()
+    assert screen._mood == "working"
+
+    screen._data = {"status": "down"}
+    screen._resolve_mood()
+    assert screen._mood == "error"
+
+
+def test_mood_map_fallback():
+    sc = ScreenConfig(
+        name="Test",
+        template="tamagotchi",
+        url="http://test",
+        mood_map=MoodMapConfig(
+            key="status",
+            map={"working": "working"},
+            fallback="idle",
+        ),
+    )
+    screen = TamagotchiScreen(sc)
+
+    screen._data = {"status": "unknown_value"}
+    screen._resolve_mood()
+    assert screen._mood == "idle"
+
+
+# --- Stale detection ---
+
+
+def test_stale_heartbeat_sets_offline():
+    from datetime import timedelta
+
+    sc = ScreenConfig(
+        name="Test",
+        template="tamagotchi",
+        url="http://test",
+        stale_threshold=60,
+        mood_map=MoodMapConfig(
+            key="status",
+            map={"working": "working", "offline": "error"},
+            fallback="idle",
+        ),
+    )
+    screen = TamagotchiScreen(sc)
+
+    old_hb = (datetime.now(timezone.utc) - timedelta(seconds=120)).isoformat()
+    screen._data = {"status": "working", "last_heartbeat": old_hb}
+    screen._resolve_mood()
+
+    stale_threshold = screen._config.stale_threshold
+    heartbeat = screen._data.get("last_heartbeat")
+    if heartbeat:
+        dt = datetime.fromisoformat(heartbeat)
+        age = (datetime.now(timezone.utc) - dt).total_seconds()
+        if age > stale_threshold:
+            screen._data["status"] = "offline"
+            screen._resolve_mood()
+
+    assert screen._data["status"] == "offline"
+    assert screen._mood == "error"
+
+
+def test_fresh_heartbeat_unchanged():
+    from datetime import timedelta
+
+    sc = ScreenConfig(
+        name="Test",
+        template="tamagotchi",
+        url="http://test",
+        stale_threshold=120,
+        mood_map=MoodMapConfig(
+            key="status",
+            map={"working": "working", "offline": "error"},
+            fallback="idle",
+        ),
+    )
+    screen = TamagotchiScreen(sc)
+
+    recent_hb = (datetime.now(timezone.utc) - timedelta(seconds=10)).isoformat()
+    screen._data = {"status": "working", "last_heartbeat": recent_hb}
+    screen._resolve_mood()
+
+    stale_threshold = screen._config.stale_threshold
+    heartbeat = screen._data.get("last_heartbeat")
+    if heartbeat:
+        dt = datetime.fromisoformat(heartbeat)
+        age = (datetime.now(timezone.utc) - dt).total_seconds()
+        if age > stale_threshold:
+            screen._data["status"] = "offline"
+            screen._resolve_mood()
+
+    assert screen._data["status"] == "working"
+    assert screen._mood == "working"
+
+
+# --- AgentFeedEntry and agent_feed ---
+
+
+def test_agent_feed_entry():
+    a = AgentFeedEntry(name="OpenCode", url="http://localhost:7788/status")
+    assert a.name == "OpenCode"
+    assert a.url == "http://localhost:7788/status"
+
+
+def test_agent_feed_config_parsing():
+    data = {
+        "display": {"backend": "mock"},
+        "screens": [
+            {
+                "name": "All Agents",
+                "template": "agent_feed",
+                "poll_interval": 5,
+                "agents": [
+                    {"name": "OpenCode", "url": "http://localhost:7788/status"},
+                    {"name": "Cursor", "url": "http://localhost:7789/status"},
+                ],
+            }
+        ],
+    }
+    cfg = AppConfig.from_dict(data)
+    assert len(cfg.screens) == 1
+    assert cfg.screens[0].template == "agent_feed"
+    assert len(cfg.screens[0].agents) == 2
+    assert cfg.screens[0].agents[0].name == "OpenCode"
+
+
+def test_agent_feed_screen_render():
+    from ai_health_board.screens.agent_feed import AgentFeedScreen
+
+    sc = ScreenConfig(
+        name="All Agents",
+        template="agent_feed",
+        agents=[
+            AgentFeedEntry(name="OpenCode", url="http://localhost:7788/status"),
+            AgentFeedEntry(name="Cursor", url="http://localhost:7789/status"),
+        ],
+    )
+    screen = AgentFeedScreen(sc)
+    screen._agents_data = [
+        {"name": "OpenCode", "status": "working", "message": "Refactoring auth"},
+        {"name": "Cursor", "status": "idle"},
+    ]
+    img = screen.render(122, 250)
+    assert img.size == (122, 250)
+
+
+def test_agent_feed_screen_has_changed():
+    from ai_health_board.screens.agent_feed import AgentFeedScreen
+
+    sc = ScreenConfig(
+        name="All Agents",
+        template="agent_feed",
+        agents=[AgentFeedEntry(name="Test", url="http://test")],
+    )
+    screen = AgentFeedScreen(sc)
+    assert screen.has_changed() is True
+    screen._agents_data = [{"name": "Test", "status": "idle"}]
+    screen.render(122, 250)
+    assert screen.has_changed() is False
+    screen._agents_data = [{"name": "Test", "status": "working"}]
+    assert screen.has_changed() is True
+
+
+def test_create_screens_agent_feed():
+    cfg = AppConfig(
+        display=DisplayConfig("mock"),
+        screens=[
+            ScreenConfig(
+                name="All Agents",
+                template="agent_feed",
+                agents=[AgentFeedEntry(name="Test", url="http://test")],
+            ),
+        ],
+    )
+    screens = create_screens(cfg)
+    assert len(screens) == 1
+    from ai_health_board.screens.agent_feed import AgentFeedScreen
+
+    assert isinstance(screens[0], AgentFeedScreen)
 
 
 if __name__ == "__main__":

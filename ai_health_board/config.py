@@ -145,6 +145,8 @@ class MoodMapConfig:
     ok: str = "idle"
     ok_busy: str = "working"
     error: str = "error"
+    map: Dict[str, str] = dataclass_field(default_factory=dict)
+    fallback: str = "idle"
 
 
 @dataclass
@@ -165,16 +167,24 @@ class SpriteConfig:
 
 
 @dataclass
+class AgentFeedEntry:
+    name: str
+    url: str
+
+
+@dataclass
 class ScreenConfig:
     name: str
     template: str
     poll_interval: int = 30
     display_duration: int = 30
+    stale_threshold: int = 120
     categories: List[StatusBoardCategory] = dataclass_field(default_factory=list)
     url: str = ""
     sprites: Optional[SpriteConfig] = None
     mood_map: Optional[MoodMapConfig] = None
     info_lines: List[InfoLineConfig] = dataclass_field(default_factory=list)
+    agents: List[AgentFeedEntry] = dataclass_field(default_factory=list)
 
 
 @dataclass
@@ -254,6 +264,8 @@ class AppConfig:
                     ok=mood_raw.get("ok", "idle"),
                     ok_busy=mood_raw.get("ok_busy", "working"),
                     error=mood_raw.get("error", "error"),
+                    map=mood_raw.get("map", {}),
+                    fallback=mood_raw.get("fallback", "idle"),
                 )
 
             info_lines: List[InfoLineConfig] = []
@@ -268,17 +280,28 @@ class AppConfig:
                     )
                 )
 
+            agents: List[AgentFeedEntry] = []
+            for a_raw in s_raw.get("agents", []):
+                agents.append(
+                    AgentFeedEntry(
+                        name=a_raw.get("name", ""),
+                        url=a_raw.get("url", ""),
+                    )
+                )
+
             screens.append(
                 ScreenConfig(
                     name=s_raw.get("name", ""),
                     template=s_raw.get("template", "status_board"),
                     poll_interval=s_raw.get("poll_interval", 30),
                     display_duration=s_raw.get("display_duration", 30),
+                    stale_threshold=s_raw.get("stale_threshold", 120),
                     categories=categories,
                     url=s_raw.get("url", ""),
                     sprites=sprites,
                     mood_map=mood_map,
                     info_lines=info_lines,
+                    agents=agents,
                 )
             )
 

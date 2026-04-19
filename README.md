@@ -242,7 +242,139 @@ timezone: UTC
 
 ### screens.yml
 
-See `config/screens.yml.example` for the full annotated config with both templates.
+See `config/screens.yml.example` for the full annotated config. Four templates are available:
+
+**`status_board`** -- Category/bullet status display (polls Statuspage or raw JSON endpoints)
+
+**`tamagotchi`** -- Character-based agent monitor with sprites and mood mapping
+
+**`agent_feed`** -- Multi-agent compact list (see Agent Status Feed Protocol below)
+
+**`ui:<name>`** -- Any registered ui/ template (boot, setup, idle, error, message)
+
+## Agent Status Feed Protocol
+
+Any AI agent (opencode, cursor, etc.) can feed its live status into the display by serving a simple JSON endpoint over HTTP.
+
+### Agent endpoint
+
+Each agent serves JSON at a URL (e.g. `http://agent-host:7788/status`):
+
+```json
+{
+  "status": "working",
+  "message": "Refactoring auth module",
+  "pending": 0,
+  "started_at": "2026-04-19T10:30:00Z",
+  "last_heartbeat": "2026-04-19T10:35:22Z",
+  "metadata": {
+    "files_modified": 3,
+    "commands_run": 7,
+    "task": "implement-auth"
+  }
+}
+```
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `status` | string | Yes | One of: `idle`, `working`, `waiting_input`, `stuck`, `error`, `success` |
+| `last_heartbeat` | ISO 8601 | Yes | Timestamp of last update; used for stale/offline detection |
+| `message` | string | No | Current activity (shown in agent_feed rows and tamagotchi info_lines) |
+| `pending` | int | No | Number of pending tasks |
+| `started_at` | ISO 8601 | No | When the current task started |
+| `metadata` | object | No | Freeform dict; accessible via dot-notation in info_lines |
+
+### Per-agent tamagotchi screen
+
+One agent per screen, with sprites and a mood map:
+
+```yaml
+  - name: OpenCode
+    template: tamagotchi
+    poll_interval: 5
+    display_duration: 15
+    url: http://192.168.1.50:7788/status
+    stale_threshold: 120
+    sprites:
+      idle: img/irk_1.png
+      working: img/irk_2.png
+      error: img/irk_3.png
+      success: img/irk_4.png
+    mood_map:
+      key: status
+      map:
+        idle: idle
+        working: working
+        waiting_input: working
+        stuck: error
+        error: error
+        success: success
+        offline: error
+      fallback: idle
+    info_lines:
+      - label: status
+        key: status
+      - label: task
+        key: message
+        max_length: 18
+      - label: files
+        key: metadata.files_modified
+```
+
+### Multi-agent feed screen
+
+All agents on one screen as compact rows:
+
+```yaml
+  - name: All Agents
+    template: agent_feed
+    poll_interval: 5
+    display_duration: 30
+    stale_threshold: 120
+    agents:
+      - name: OpenCode
+        url: http://192.168.1.50:7788/status
+      - name: Cursor
+        url: http://192.168.1.51:7788/status
+      - name: Lotus
+        url: https://lotus.therektgames.com/health
+```
+
+Rendered as compact rows: `[icon] AgentName  working  "Refactoring auth..."`
+
+### Mood map modes
+
+**Legacy** (binary ok/error -- backward compatible):
+
+```yaml
+mood_map:
+  key: status
+  ok: idle
+  ok_busy: working
+  error: error
+```
+
+**Explicit map** (recommended for agents):
+
+```yaml
+mood_map:
+  key: status
+  map:
+    idle: idle
+    working: working
+    waiting_input: working
+    stuck: error
+    error: error
+    success: success
+    offline: error
+  fallback: idle
+```
+
+When `map` is present, it takes precedence over the legacy ok/ok_busy/error logic.
+
+### Stale detection
+
+Both `tamagotchi` and `agent_feed` screens support `stale_threshold` (default: 120 seconds). If `last_heartbeat` is older than the threshold, the agent's status is overwritten to `"offline"`. If the fetch itself fails, the screen shows `[-] connection error`.
 
 ## Troubleshooting
 

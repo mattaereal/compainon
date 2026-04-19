@@ -38,6 +38,7 @@ DISPLAY_CHOICES = [
 TEMPLATE_CHOICES = [
     ("status_board", "Category/bullet status display"),
     ("tamagotchi", "Character-based agent monitor"),
+    ("agent_feed", "Multi-agent compact list"),
 ]
 
 BUILTIN_ICONS = ["anthropic", "openai", "lotus", "generic"]
@@ -205,6 +206,25 @@ def _configure_tamagotchi() -> Dict[str, Any]:
     return screen
 
 
+def _configure_agent_feed() -> Dict[str, Any]:
+    screen: Dict[str, Any] = {}
+    screen["template"] = "agent_feed"
+    screen["poll_interval"] = int(_prompt("Poll interval (seconds)", "5"))
+    screen["display_duration"] = int(_prompt("Display duration (seconds)", "30"))
+    screen["stale_threshold"] = int(_prompt("Stale threshold (seconds)", "120"))
+
+    agents = []
+    print("\n  Agents (blank name to finish):")
+    while True:
+        name = _prompt("  Agent name", "")
+        if not name:
+            break
+        url = _prompt("  Status URL", "")
+        agents.append({"name": name, "url": url})
+    screen["agents"] = agents
+    return screen
+
+
 def _configure_screens() -> List[Dict[str, Any]]:
     print("\n--- Screen Configuration ---")
     screens = []
@@ -219,6 +239,8 @@ def _configure_screens() -> List[Dict[str, Any]]:
             screen = _configure_status_board()
         elif template == "tamagotchi":
             screen = _configure_tamagotchi()
+        elif template == "agent_feed":
+            screen = _configure_agent_feed()
         else:
             screen = {"template": template}
 

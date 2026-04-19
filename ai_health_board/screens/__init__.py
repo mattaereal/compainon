@@ -29,6 +29,10 @@ def create_screens(config: AppConfig) -> List[Screen]:
             from .tamagotchi import TamagotchiScreen
 
             screens.append(TamagotchiScreen(sc))
+        elif sc.template == "agent_feed":
+            from .agent_feed import AgentFeedScreen
+
+            screens.append(AgentFeedScreen(sc))
         else:
             from .ui_template import UiTemplateScreen
 
