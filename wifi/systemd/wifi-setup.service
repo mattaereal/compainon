@@ -1,0 +1,29 @@
+[Unit]
+Description=Wi-Fi Setup Onboarding Service (automatic fallback)
+After=NetworkManager.service network-online.target
+Wants=NetworkManager.service
+StartLimitIntervalSec=120
+StartLimitBurst=3
+
+[Service]
+Type=simple
+# NOTE: Paths and User are set by scripts/install_services.sh
+User=__USER__
+Group=__USER__
+WorkingDirectory=__REPO_DIR__/wifi
+ExecStart=/usr/bin/python3 -m provisioning.app
+ExecStop=__REPO_DIR__/wifi/scripts/stop_setup_mode.sh
+Restart=on-failure
+RestartSec=15
+StandardOutput=journal
+StandardError=journal
+
+Environment=WIFI_SETUP_BOOT_TIMEOUT=45
+Environment=WIFI_SETUP_IDLE_TIMEOUT=600
+Environment=WIFI_SETUP_HOTSPOT_SSID=AI-BOARD-SETUP
+Environment=WIFI_SETUP_HOTSPOT_IP=10.42.0.1
+Environment=WIFI_SETUP_WEB_PORT=80
+Environment=WIFI_SETUP_DISPLAY_HOOK=ai_health_board.wifi_display_hook
+
+[Install]
+WantedBy=multi-user.target

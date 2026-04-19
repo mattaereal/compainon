@@ -152,6 +152,36 @@ sudo systemctl restart ai-health-board
 sudo systemctl restart pisugar-button
 ```
 
+## Wi-Fi Onboarding
+
+The `wifi/` subsystem provides a captive-portal Wi-Fi setup -- no keyboard or screen needed to configure Wi-Fi.
+
+**How it works:**
+1. On boot, waits up to 45s for an existing Wi-Fi connection
+2. If no Wi-Fi, creates an open hotspot (`AI-BOARD-SETUP`)
+3. User connects phone to the hotspot, opens `http://10.42.0.1`
+4. Selects a network, enters password, taps Connect
+5. Pi connects and the hotspot shuts down automatically
+
+**Force setup mode:** Place an empty file at `/boot/firmware/setup-wifi` on the SD card, then reboot.
+
+**Install the wifi services** (included in `install_services.sh`):
+```bash
+sudo ./scripts/install_services.sh
+```
+
+**Manual commands:**
+```bash
+sudo ./wifi/scripts/start_setup_mode.sh    # Start setup mode now
+sudo ./wifi/scripts/stop_setup_mode.sh     # Stop setup mode
+sudo ./wifi/scripts/add_wifi.sh SSID PASS  # Add a network from CLI
+sudo ./wifi/scripts/doctor_wifi_setup.sh   # Check wifi setup health
+```
+
+**Display integration:** When setup mode activates, the e-paper shows the hotspot SSID and URL automatically.
+
+See `wifi/docs/wifi-setup.md` for full documentation.
+
 ## CLI reference
 
 ```bash

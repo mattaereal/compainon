@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wi-Fi Setup</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div id="container">
+  <h1>Wi-Fi Setup</h1>
+
+  <div id="status-bar">
+    <span id="status-state">Loading ...</span>
+    <span id="status-error" class="error"></span>
+  </div>
+
+  <section id="network-list-section">
+    <h2>Nearby Networks</h2>
+    <button id="btn-scan" type="button">Refresh Scan</button>
+    <div id="scan-spinner" class="spinner hidden">Scanning ...</div>
+    <ul id="network-list"></ul>
+    <p id="no-networks" class="muted hidden">No networks found.</p>
+  </section>
+
+  <section id="manual-section">
+    <h2>Manual Entry</h2>
+    <form id="connect-form">
+      <div class="field">
+        <label for="ssid">SSID</label>
+        <input type="text" id="ssid" name="ssid" maxlength="32" placeholder="Network name" autocomplete="off" required>
+      </div>
+
+      <div class="field">
+        <label>
+          <input type="checkbox" id="hidden-toggle"> Hidden network
+        </label>
+      </div>
+
+      <div class="field">
+        <label>
+          <input type="checkbox" id="open-toggle"> Open network (no password)
+        </label>
+      </div>
+
+      <div class="field" id="password-field">
+        <label for="password">Password</label>
+        <input type="password" id="password" name="password" maxlength="63" placeholder="Wi-Fi password" autocomplete="off">
+      </div>
+
+      <div id="form-error" class="error hidden"></div>
+
+      <button type="submit" id="btn-connect">Connect</button>
+      <div id="connect-spinner" class="spinner hidden">Connecting ...</div>
+    </form>
+  </section>
+
+  <footer>
+    <p class="muted">Setup mode is temporary. Hotspot closes automatically after connecting.</p>
+  </footer>
+</div>
+
+<script>
+(function() {
+  var ssidInput  = document.getElementById('ssid');
+  var hiddenCb   = document.getElementById('hidden-toggle');
+  var openCb     = document.getElementById('open-toggle');
+  var pwField    = document.getElementById('password-field');
+  var pwInput    = document.getElementById('password');
+  var form       = document.getElementById('connect-form');
+  var formError  = document.getElementById('form-error');
+  var netList    = document.getElementById('network-list');
+  var noNets     = document.getElementById('no-networks');
+  var scanBtn    = document.getElementById('btn-scan');
+  var scanSpin   = document.getElementById('scan-spinner');
+  var connSpin   = document.getElementById('connect-spinner');
+  var connBtn    = document.getElementById('btn-connect');
+  var statusState= document.getElementById('status-state');
+  var statusErr  = document.getElementById('status-error');
+
+  openCb.addEventListener('change', function() {
+    pwField.style.display = openCb.checked ? 'none' : '';
+    if (openCb.checked) pwInput.removeAttribute('required');
+    else pwInput.setAttribute('required', 'required');
+  });
+
+  function setFormError(msg) {
+    formError.textContent = msg || '';
+    formError.classList.toggle('hidden', !msg);
+  }
+
+  function esc(s) {
+    var d = document.createElement('div');
+    d.appendChild(document.createTextNode(s));
+    return d.innerHTML;
+  }
+
+  function signalBars(v) {
+    if (v >= 80) return '\u2588\u2588\u2588\u2588';
+    if (v >= 60) return '\u2588\u2588\u2588\u2591';
+    if (v >= 40) return '\u2588\u2588\u2591\u2591';
+    if (v >= 20) return '\u2588\u2591\u2591\u2591';
+    return '\u2591\u2591\u2591\u2591';
+  }
+
+  function secLabel(s) {
+    if (!s || s === '--') return 'Open';
+    return s;
+  }
+
+  function loadScan() {
+    scanSpin.classList.remove('hidden');
+    scanBtn.disabled = true;
+    fetch('/api/scan?force=1')
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        netList.innerHTML = '';
+        var nets = data.networks || [];
+        if (nets.length === 0) {
+          noNets.classList.remove('hidden');
+        } else {
+          noNets.classList.add('hidden');
+          nets.forEach(function(n) {
+            var li = document.createElement('li');
+            li.className = 'network-item';
+            li.innerHTML =
+              '<span class="net-ssid">' + esc(n.ssid) + '</span>' +
+              '<span class="net-signal">' + signalBars(n.signal) + ' ' + n.signal + '%</span>' +
+              '<span class="net-sec">' + esc(secLabel(n.security)) + '</span>';
+            li.addEventListener('click', function() {
+              ssidInput.value = n.ssid;
+              var isOpen = !n.security || n.security === '--' || n.security.toLowerCase().indexOf('wpa') === -1;
+              openCb.checked = isOpen;
+              openCb.dispatchEvent(new Event('change'));
+              window.scrollTo(0, document.getElementById('manual-section').offsetTop - 10);
+            });
+            netList.appendChild(li);
+          });
+        }
+      })
+      .catch(function(e) { setFormError('Scan failed: ' + e.message); })
+      .finally(function() {
+        scanSpin.classList.add('hidden');
+        scanBtn.disabled = false;
+      });
+  }
+
+  scanBtn.addEventListener('click', loadScan);
+
+  form.addEventListener('submit', function(e) {
+    e.preventDefault();
+    setFormError('');
+
+    var ssid = ssidInput.value.trim();
+    if (!ssid) { setFormError('SSID is required.'); return; }
+    if (!openCb.checked && !pwInput.value) { setFormError('Password is required for secured networks.'); return; }
+
+    connBtn.disabled = true;
+    connSpin.classList.remove('hidden');
+
+    var payload = {
+      ssid: ssid,
+      password: pwInput.value || null,
+      hidden: hiddenCb.checked,
+      open_network: openCb.checked
+    };
+
+    fetch('/api/connect', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload)
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.ok) {
+        formError.classList.remove('hidden');
+        formError.classList.remove('error');
+        formError.classList.add('success');
+        formError.textContent = data.message;
+        setTimeout(function() {
+          document.getElementById('container').innerHTML =
+            '<h1>Connecting ...</h1>' +
+            '<p>' + esc(data.message) + '</p>' +
+            '<p>The hotspot is shutting down and your phone will disconnect from it.</p>' +
+            '<p>Reconnect your phone to your usual Wi-Fi. The Pi should now be on the same network.</p>' +
+            '<p class="muted">You can close this page.</p>';
+        }, 1000);
+      } else {
+        setFormError(data.error || 'Connection failed.');
+        pollStatus();
+      }
+    })
+    .catch(function(e) {
+      setFormError('Connection attempt sent. The hotspot may be shutting down. ' +
+        'Reconnect your phone to your usual Wi-Fi to verify the Pi joined the network.');
+    })
+    .finally(function() {
+      connBtn.disabled = false;
+      connSpin.classList.add('hidden');
+    });
+  });
+
+  function pollStatus() {
+    fetch('/api/status')
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        statusState.textContent = 'State: ' + d.state;
+        statusErr.textContent = d.last_error ? 'Error: ' + d.last_error : '';
+      })
+      .catch(function() {});
+  }
+
+  pollStatus();
+  setInterval(pollStatus, 5000);
+  loadScan();
+})();
+</script>
+</body>
+</html>

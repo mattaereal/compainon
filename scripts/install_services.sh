@@ -115,18 +115,102 @@ StandardError=journal
 WantedBy=multi-user.target
 EOF
 
+# --- Wi-Fi setup services (if wifi/ exists) ---
+
+WIFI_DIR="${REPO_DIR}/wifi"
+if [[ -d "$WIFI_DIR" && -f "${WIFI_DIR}/provisioning/app.py" ]]; then
+    echo "--- Generating wifi-setup.service ---"
+
+    cat > /tmp/wifi-setup.service <<EOF
+[Unit]
+Description=Wi-Fi Setup Onboarding Service (automatic fallback)
+After=NetworkManager.service network-online.target
+Wants=NetworkManager.service
+StartLimitIntervalSec=120
+StartLimitBurst=3
+
+[Service]
+Type=simple
+User=${ACTUAL_USER}
+Group=${ACTUAL_USER}
+WorkingDirectory=${WIFI_DIR}
+ExecStart=/usr/bin/python3 -m provisioning.app
+ExecStop=${WIFI_DIR}/scripts/stop_setup_mode.sh
+Restart=on-failure
+RestartSec=15
+StandardOutput=journal
+StandardError=journal
+
+Environment=WIFI_SETUP_BOOT_TIMEOUT=45
+Environment=WIFI_SETUP_IDLE_TIMEOUT=600
+Environment=WIFI_SETUP_HOTSPOT_SSID=AI-BOARD-SETUP
+Environment=WIFI_SETUP_HOTSPOT_IP=10.42.0.1
+Environment=WIFI_SETUP_WEB_PORT=80
+Environment=WIFI_SETUP_DISPLAY_HOOK=ai_health_board.wifi_display_hook
+Environment=PYTHONPATH=${REPO_DIR}
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    echo "--- Generating wifi-setup-trigger.service ---"
+
+    cat > /tmp/wifi-setup-trigger.service <<EOF
+[Unit]
+Description=Wi-Fi Setup Onboarding Service (trigger file)
+After=NetworkManager.service
+Wants=NetworkManager.service
+ConditionPathExistsGlob=|/boot/setup-wifi
+ConditionPathExistsGlob=|/boot/firmware/setup-wifi
+
+[Service]
+Type=simple
+User=${ACTUAL_USER}
+Group=${ACTUAL_USER}
+WorkingDirectory=${WIFI_DIR}
+ExecStart=/usr/bin/python3 -m provisioning.app
+ExecStop=${WIFI_DIR}/scripts/stop_setup_mode.sh
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+Environment=WIFI_SETUP_BOOT_TIMEOUT=45
+Environment=WIFI_SETUP_IDLE_TIMEOUT=600
+Environment=WIFI_SETUP_HOTSPOT_SSID=AI-BOARD-SETUP
+Environment=WIFI_SETUP_HOTSPOT_IP=10.42.0.1
+Environment=WIFI_SETUP_WEB_PORT=80
+Environment=WIFI_SETUP_DISPLAY_HOOK=ai_health_board.wifi_display_hook
+Environment=PYTHONPATH=${REPO_DIR}
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    WIFI_SERVICES="wifi-setup wifi-setup-trigger"
+else
+    echo "[SKIP] wifi/ directory not found, skipping wifi services"
+    WIFI_SERVICES=""
+fi
+
 echo "--- Installing services ---"
 
 install -m 644 /tmp/ai-health-board.service /etc/systemd/system/ai-health-board.service
 install -m 644 /tmp/pisugar-button.service /etc/systemd/system/pisugar-button.service
 rm -f /tmp/ai-health-board.service /tmp/pisugar-button.service
 
+if [[ -n "$WIFI_SERVICES" ]]; then
+    install -m 644 /tmp/wifi-setup.service /etc/systemd/system/wifi-setup.service
+    install -m 644 /tmp/wifi-setup-trigger.service /etc/systemd/system/wifi-setup-trigger.service
+    rm -f /tmp/wifi-setup.service /tmp/wifi-setup-trigger.service
+fi
+
 systemctl daemon-reload
 
 echo ""
 echo "--- Enabling services ---"
 
-systemctl enable ai-health-board pisugar-button
+systemctl enable ai-health-board pisugar-button $WIFI_SERVICES
 
 echo ""
 echo "--- Starting services ---"
@@ -134,6 +218,9 @@ echo "--- Starting services ---"
 # Restart if already running, start if not
 systemctl restart ai-health-board 2>/dev/null || systemctl start ai-health-board
 systemctl restart pisugar-button 2>/dev/null || systemctl start pisugar-button
+for svc in $WIFI_SERVICES; do
+    systemctl restart "$svc" 2>/dev/null || systemctl start "$svc"
+done
 
 echo ""
 echo "=== Done ==="
@@ -141,17 +228,27 @@ echo ""
 echo "Installed services:"
 echo "  ai-health-board  -> ${REPO_DIR}/app.py run"
 echo "  pisugar-button   -> ${REPO_DIR}/scripts/pisugar_button.py"
+if [[ -n "$WIFI_SERVICES" ]]; then
+echo "  wifi-setup       -> ${WIFI_DIR}/provisioning/ (auto-fallback)"
+echo "  wifi-setup-trigger -> ${WIFI_DIR}/provisioning/ (trigger file only)"
+fi
 echo ""
 echo "Status:"
-systemctl --no-pager status ai-health-board pisugar-button 2>/dev/null || true
+systemctl --no-pager status ai-health-board pisugar-button $WIFI_SERVICES 2>/dev/null || true
 echo ""
 echo "View logs:"
 echo "  sudo journalctl -u ai-health-board -f"
 echo "  sudo journalctl -u pisugar-button -f"
+if [[ -n "$WIFI_SERVICES" ]]; then
+echo "  sudo journalctl -u wifi-setup -f"
+fi
 echo ""
 echo "Stop / restart:"
 echo "  sudo systemctl restart ai-health-board"
 echo "  sudo systemctl restart pisugar-button"
 echo "  sudo systemctl stop ai-health-board pisugar-button"
+if [[ -n "$WIFI_SERVICES" ]]; then
+echo "  sudo systemctl restart wifi-setup"
+fi
 echo ""
 echo "Re-run this script anytime after git pull to update service paths."

@@ -80,6 +80,7 @@ Screens are defined in YAML config using templates. Two templates exist:
 ai_health_board/
   config.py              # Data classes + YAML loading (ScreenConfig, StatusBoardCategory, etc.)
   input.py               # InputManager - PiSugar button signals (SIGUSR1/SIGUSR2), PID file
+  wifi_display_hook.py   # Display hook for wifi onboarding (renders setup info on e-paper)
   screens/
     base.py              # Screen ABC (fetch, render, poll_interval, display_duration, has_changed)
     status_board.py      # Status board template + pixel art icon generators
@@ -95,6 +96,20 @@ ai_health_board/
   models.py              # ServiceStatus, ComponentStatus, ProviderStatus, AppState
 app.py                   # CLI entrypoint (run, once, preview, demo, doctor)
 config/providers.yaml    # Active config (mock backend)
+wifi/                    # Wi-Fi onboarding subsystem (self-contained)
+  provisioning/          # Flask captive-portal app
+    app.py               # Web UI + main() entrypoint
+    config.py            # Config constants (env var overrides)
+    nm.py                # NetworkManager/nmcli wrapper
+    hotspot.py           # Hotspot lifecycle + display hook
+    scanner.py           # Wi-Fi scan with caching
+    state.py             # State machine
+    templates/index.html # Mobile-friendly web UI
+    static/style.css     # Dark theme CSS
+  scripts/               # CLI helpers (add_wifi, doctor, start/stop setup)
+  systemd/               # Service templates (wifi-setup, wifi-setup-trigger)
+  docs/wifi-setup.md     # Full documentation
+  requirements.txt       # flask>=3.0,<4.0 (separate from main app)
 ```
 
 ### PiSugar Button Integration
@@ -152,7 +167,7 @@ The scheduler always renders when switching screens. `has_changed()` only gates 
 python -m pytest tests/ -v
 ```
 
-All 78 tests should pass. Tests cover:
+All 79 tests should pass. Tests cover:
 - Config loading and data classes
 - Screen rendering (status board + tamagotchi)
 - Provider normalization (statuspage)
@@ -160,6 +175,8 @@ All 78 tests should pass. Tests cover:
 - Mood resolution and info line formatting
 - Mock data injection for demo mode
 - InputManager (PID file, signal handling, interruptible sleep)
+
+The `wifi/` subsystem has its own Flask app and tests -- it is self-contained and does not share imports with the main app.
 
 ## Config Format
 

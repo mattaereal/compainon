@@ -1,0 +1,188 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background: #1a1a2e;
+  color: #e0e0e0;
+  padding: 1rem;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+#container {
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+h1 {
+  text-align: center;
+  color: #4fc3f7;
+  font-size: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+h2 {
+  font-size: 1.1rem;
+  color: #81d4fa;
+  margin-bottom: 0.5rem;
+  border-bottom: 1px solid #333;
+  padding-bottom: 0.25rem;
+}
+
+#status-bar {
+  background: #16213e;
+  border: 1px solid #0f3460;
+  border-radius: 6px;
+  padding: 0.6rem 0.8rem;
+  margin-bottom: 1rem;
+  font-size: 0.85rem;
+}
+
+#status-state {
+  display: block;
+  color: #a5d6a7;
+}
+
+#status-error {
+  display: block;
+}
+
+section {
+  margin-bottom: 1.5rem;
+}
+
+#btn-scan {
+  display: inline-block;
+  margin-bottom: 0.5rem;
+  padding: 0.4rem 0.8rem;
+  background: #0f3460;
+  color: #e0e0e0;
+  border: 1px solid #1a5276;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+#btn-scan:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+#network-list {
+  list-style: none;
+  padding: 0;
+}
+
+.network-item {
+  background: #16213e;
+  border: 1px solid #0f3460;
+  border-radius: 6px;
+  padding: 0.6rem 0.8rem;
+  margin-bottom: 0.4rem;
+  cursor: pointer;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.network-item:active,
+.network-item:hover {
+  border-color: #4fc3f7;
+}
+
+.net-ssid {
+  flex: 1 1 55%;
+  font-weight: 600;
+  word-break: break-all;
+}
+
+.net-signal {
+  flex: 0 0 auto;
+  font-family: monospace;
+  color: #a5d6a7;
+  font-size: 0.85rem;
+}
+
+.net-sec {
+  flex: 0 0 100%;
+  font-size: 0.8rem;
+  color: #90a4ae;
+}
+
+.field {
+  margin-bottom: 0.8rem;
+}
+
+.field label {
+  display: block;
+  margin-bottom: 0.2rem;
+  font-size: 0.85rem;
+  color: #b0bec5;
+}
+
+.field input[type="text"],
+.field input[type="password"] {
+  width: 100%;
+  padding: 0.5rem 0.6rem;
+  background: #16213e;
+  color: #e0e0e0;
+  border: 1px solid #0f3460;
+  border-radius: 4px;
+  font-size: 1rem;
+}
+
+.field input:focus {
+  border-color: #4fc3f7;
+  outline: none;
+}
+
+#btn-connect {
+  display: block;
+  width: 100%;
+  padding: 0.7rem;
+  background: #0f3460;
+  color: #e0e0e0;
+  border: 1px solid #1a5276;
+  border-radius: 6px;
+  font-size: 1rem;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+#btn-connect:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.error {
+  color: #ef5350;
+}
+
+.success {
+  color: #66bb6a;
+}
+
+.hidden {
+  display: none !important;
+}
+
+.muted {
+  color: #78909c;
+  font-size: 0.8rem;
+}
+
+.spinner {
+  color: #4fc3f7;
+  font-size: 0.85rem;
+  margin-top: 0.3rem;
+}
+
+footer {
+  margin-top: 2rem;
+  text-align: center;
+}
