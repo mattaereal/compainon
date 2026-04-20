@@ -84,6 +84,22 @@ MOCK_DATA = {
         "detail": "Unable to reach status endpoints. Check WiFi.",
         "last_ok": "14:30",
     },
+    "device_status": {
+        "hostname": "tamagotchai.local",
+        "ip": "192.168.1.42",
+        "ssid": "Vault-TecNet",
+        "bssid": "AA:BB:CC:DD:EE:FF",
+        "wifi_status": "connected",
+        "signal": "85%",
+        "cpu_temp": "52.3C",
+        "memory": "234/512MB",
+        "disk": "3.2/28GB",
+        "uptime": "2d 4h 32m",
+        "battery": "87%",
+        "battery_charging": True,
+        "pid": "12345",
+        "version": "1.0.0",
+    },
 }
 
 

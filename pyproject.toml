@@ -17,6 +17,9 @@ dependencies = [
 dev = [
     "pytest>=7.0",
 ]
+pisugar = [
+    "pisugar>=1.0.0",
+]
 
 [tool.setuptools]
 packages = ["ai_health_board", "ai_health_board.providers", "ai_health_board.render", "ai_health_board.display"]

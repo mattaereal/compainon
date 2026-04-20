@@ -858,6 +858,98 @@ def test_create_screens_agent_feed():
     assert isinstance(screens[0], AgentFeedScreen)
 
 
+def test_device_status_screen_render():
+    from ai_health_board.screens.device_status import DeviceStatusScreen
+
+    sc = ScreenConfig(name="Device", template="device_status")
+    screen = DeviceStatusScreen(sc)
+    screen._data = {
+        "hostname": "test.local",
+        "ip": "192.168.1.1",
+        "ssid": "TestNet",
+        "bssid": "AA:BB:CC:DD:EE:FF",
+        "wifi_status": "connected",
+        "signal": "90%",
+        "cpu_temp": "45.2C",
+        "memory": "128/512MB",
+        "disk": "2.1/28GB",
+        "uptime": "0d 1h 23m",
+        "battery": "95%",
+        "battery_charging": True,
+        "pid": "99999",
+        "version": "1.0.0",
+    }
+    img = screen.render(122, 250)
+    assert img.size == (122, 250)
+    assert img.mode == "1"
+
+
+def test_device_status_screen_has_changed():
+    from ai_health_board.screens.device_status import DeviceStatusScreen
+
+    sc = ScreenConfig(name="Device", template="device_status")
+    screen = DeviceStatusScreen(sc)
+    assert screen.has_changed() is True
+    screen._data = {"hostname": "test", "ip": "1.2.3.4"}
+    screen.render(122, 250)
+    assert screen.has_changed() is False
+    screen._data = {"hostname": "test", "ip": "5.6.7.8"}
+    assert screen.has_changed() is True
+
+
+def test_device_status_screen_defaults():
+    from ai_health_board.screens.device_status import DeviceStatusScreen
+
+    sc = ScreenConfig(name="Device", template="device_status")
+    screen = DeviceStatusScreen(sc)
+    assert screen.poll_interval == 30
+    assert screen.display_duration == 30
+    screen._data = {}
+    img = screen.render(122, 250)
+    assert img.size == (122, 250)
+
+
+def test_device_status_helpers():
+    from ai_health_board.screens.device_status import (
+        _read_file,
+        _run_cmd,
+        _get_cpu_temp,
+        _get_uptime,
+        _get_disk,
+        _get_memory,
+    )
+
+    assert _read_file("/nonexistent/path") is None
+    assert _run_cmd(["false"], fallback="N/A") == "N/A"
+    assert _run_cmd(["echo", "hello"]) == "hello"
+
+    cpu = _get_cpu_temp()
+    assert isinstance(cpu, str)
+
+    up = _get_uptime()
+    assert isinstance(up, str)
+
+    disk = _get_disk()
+    assert isinstance(disk, str)
+
+    mem = _get_memory()
+    assert isinstance(mem, str)
+
+
+def test_create_screens_device_status():
+    cfg = AppConfig(
+        display=DisplayConfig("mock"),
+        screens=[
+            ScreenConfig(name="Device", template="device_status"),
+        ],
+    )
+    screens = create_screens(cfg)
+    assert len(screens) == 1
+    from ai_health_board.screens.device_status import DeviceStatusScreen
+
+    assert isinstance(screens[0], DeviceStatusScreen)
+
+
 if __name__ == "__main__":
     import pytest
 

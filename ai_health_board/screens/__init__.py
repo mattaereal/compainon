@@ -33,6 +33,10 @@ def create_screens(config: AppConfig) -> List[Screen]:
             from .agent_feed import AgentFeedScreen
 
             screens.append(AgentFeedScreen(sc))
+        elif sc.template == "device_status":
+            from .device_status import DeviceStatusScreen
+
+            screens.append(DeviceStatusScreen(sc))
         else:
             from .ui_template import UiTemplateScreen
 

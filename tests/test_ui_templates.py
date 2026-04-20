@@ -22,6 +22,7 @@ def test_template_registry():
     assert "message" in n
     assert "idle" in n
     assert "error" in n
+    assert "device_status" in n
 
 
 def test_render_boot():
@@ -178,6 +179,39 @@ def test_render_error_with_detail():
             "message": "Timeout",
             "detail": "Connection to upstream server failed after 10 seconds",
             "last_ok": "14:30",
+        },
+    )
+    assert img.size == (122, 250)
+
+
+def test_render_device_status():
+    from ui.templates import render
+
+    img = render("device_status")
+    assert img.size == (122, 250)
+    assert img.mode == "1"
+
+
+def test_render_device_status_with_data():
+    from ui.templates import render
+
+    img = render(
+        "device_status",
+        {
+            "hostname": "test.local",
+            "ip": "10.0.0.1",
+            "ssid": "TestNet",
+            "bssid": "AA:BB:CC:DD:EE:FF",
+            "wifi_status": "connected",
+            "signal": "90%",
+            "cpu_temp": "52.3C",
+            "memory": "234/512MB",
+            "disk": "3.2/28GB",
+            "uptime": "2d 4h 32m",
+            "battery": "87%",
+            "battery_charging": True,
+            "pid": "12345",
+            "version": "1.0.0",
         },
     )
     assert img.size == (122, 250)

@@ -145,3 +145,12 @@ screens:
   #       max_length: 18
   #     - label: files
   #       key: metadata.files_modified
+
+  # --- device_status: local device vitals ---
+  # Shows hostname, IP, WiFi, CPU temp, memory, disk, uptime, battery, PID.
+  # No url needed -- gathers data from local system calls.
+  # Battery reads from PiSugar (requires pisugar pip package on Pi).
+  # - name: Device
+  #   template: device_status
+  #   poll_interval: 30
+  #   display_duration: 15

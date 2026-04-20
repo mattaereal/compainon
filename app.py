@@ -19,6 +19,7 @@ from ai_health_board.screens.base import Screen
 from ai_health_board.screens.status_board import StatusBoardScreen, CategoryData
 from ai_health_board.screens.tamagotchi import TamagotchiScreen
 from ai_health_board.screens.agent_feed import AgentFeedScreen
+from ai_health_board.screens.device_status import DeviceStatusScreen
 from ai_health_board.screens.ui_template import UiTemplateScreen
 from ai_health_board.scheduler import screen_loop
 from ai_health_board.input import InputManager
@@ -89,11 +90,11 @@ def _inject_mock_status_board(screen: StatusBoardScreen) -> None:
     screen._last_refresh = datetime.now(timezone.utc)
 
 
-def _inject_mock_tamagotchi(screen: TamagotchiScreen) -> None:
+def _inject_mock_tamagotchi(screen: TamagotchiScreen, status: str = "ok") -> None:
     screen._data = {
-        "status": "ok",
+        "status": status,
         "proxy": True,
-        "pending": 2,
+        "pending": 2 if status == "working" else 0,
         "prs_created": 12,
         "prs_merged": 8,
         "issues_created": 3,
@@ -107,207 +108,351 @@ def _inject_mock_tamagotchi(screen: TamagotchiScreen) -> None:
     screen._resolve_mood()
 
 
-def _inject_mock_agent_feed(screen: AgentFeedScreen) -> None:
-    screen._agents_data = [
-        {
-            "name": "OpenCode",
-            "status": "working",
-            "message": "Refactoring auth module",
-            "last_heartbeat": datetime.now(timezone.utc).isoformat(),
-        },
-        {
-            "name": "Cursor",
-            "status": "idle",
-            "last_heartbeat": datetime.now(timezone.utc).isoformat(),
-        },
-        {
-            "name": "Lotus",
-            "status": "success",
-            "message": "PR merged",
-            "last_heartbeat": datetime.now(timezone.utc).isoformat(),
-        },
-    ]
+def _inject_mock_agent_feed(screen: AgentFeedScreen, scenario: str = "mixed") -> None:
+    scenarios = {
+        "mixed": [
+            {
+                "name": "OpenCode",
+                "status": "working",
+                "message": "Refactoring auth module",
+                "last_heartbeat": datetime.now(timezone.utc).isoformat(),
+            },
+            {
+                "name": "Cursor",
+                "status": "idle",
+                "last_heartbeat": datetime.now(timezone.utc).isoformat(),
+            },
+            {
+                "name": "Lotus",
+                "status": "success",
+                "message": "PR merged",
+                "last_heartbeat": datetime.now(timezone.utc).isoformat(),
+            },
+        ],
+        "all_ok": [
+            {
+                "name": "OpenCode",
+                "status": "idle",
+                "last_heartbeat": datetime.now(timezone.utc).isoformat(),
+            },
+            {
+                "name": "Cursor",
+                "status": "idle",
+                "last_heartbeat": datetime.now(timezone.utc).isoformat(),
+            },
+            {
+                "name": "Lotus",
+                "status": "idle",
+                "last_heartbeat": datetime.now(timezone.utc).isoformat(),
+            },
+        ],
+        "errors": [
+            {
+                "name": "OpenCode",
+                "status": "error",
+                "message": "Out of memory",
+                "last_heartbeat": datetime.now(timezone.utc).isoformat(),
+            },
+            {
+                "name": "Cursor",
+                "status": "stuck",
+                "message": "Waiting for input",
+                "last_heartbeat": datetime.now(timezone.utc).isoformat(),
+            },
+            {
+                "name": "Lotus",
+                "status": "offline",
+                "last_heartbeat": "2020-01-01T00:00:00Z",
+            },
+        ],
+    }
+    screen._agents_data = scenarios.get(scenario, scenarios["mixed"])
 
 
-def _demo(
+def _inject_mock_device_status(screen: DeviceStatusScreen) -> None:
+    screen._data = {
+        "hostname": "tamagotchai.local",
+        "ip": "192.168.1.42",
+        "ssid": "Vault-TecNet",
+        "bssid": "AA:BB:CC:DD:EE:FF",
+        "wifi_status": "connected",
+        "signal": "85%",
+        "cpu_temp": "52.3C",
+        "memory": "234/512MB",
+        "disk": "3.2/28GB",
+        "uptime": "2d 4h 32m",
+        "battery": "87%",
+        "battery_charging": True,
+        "pid": "12345",
+        "version": "1.0.0",
+    }
+
+
+class DemoSequence:
+    def __init__(
+        self,
+        display: DisplayBackend,
+        cfg: AppConfig,
+        output_dir: str = "out/demo_frames",
+        fast: bool = False,
+    ):
+        self._display = display
+        self._cfg = cfg
+        self._output_dir = output_dir
+        self._fast = fast
+        self._frames: List[str] = []
+        self._frame_idx = 0
+        self._is_real_hw = cfg.display.backend != "mock"
+        os.makedirs(output_dir, exist_ok=True)
+
+    def _delay(self, seconds: float) -> None:
+        if self._fast:
+            return
+        if self._is_real_hw:
+            time.sleep(seconds)
+        else:
+            time.sleep(min(seconds, 0.3))
+
+    def _save_frame(self, label: str, img) -> str:
+        self._frame_idx += 1
+        safe = label.lower().replace(" ", "_").replace(":", "_")
+        filename = f"{self._frame_idx:03d}_{safe}.png"
+        path = os.path.join(self._output_dir, filename)
+        img.save(path, format="PNG")
+        self._frames.append(path)
+        return path
+
+    def _render(self, label: str, img, display_duration: float = 3.0) -> str:
+        self._display.render_image(img)
+        path = self._save_frame(label, img)
+        print(f"  [{label}] -> {path}")
+        self._delay(display_duration)
+        return path
+
+    def boot(self) -> str:
+        from ui.templates import render as tpl_render
+        from ui.preview import MOCK_DATA
+
+        img = tpl_render("boot", MOCK_DATA["boot"])
+        return self._render("Boot", img, 3.0)
+
+    def status_board_ok(self, screen: StatusBoardScreen) -> str:
+        _inject_mock_status_board(screen)
+        screen._last_render_hash = None
+        img = screen.render(self._display.width, self._display.height)
+        return self._render("Status: All OK", img, 4.0)
+
+    def status_board_degraded(self, screen: StatusBoardScreen) -> str:
+        for cat in screen._categories:
+            if cat.name == "Claude":
+                cat.items["API"] = ServiceStatus.DEGRADED
+        screen._last_render_hash = None
+        img = screen.render(self._display.width, self._display.height)
+        return self._render("Status: Degraded", img, 3.0)
+
+    def status_board_down(self, screen: StatusBoardScreen) -> str:
+        for cat in screen._categories:
+            if cat.name == "OpenAI":
+                cat.items["App"] = ServiceStatus.DOWN
+        screen._last_render_hash = None
+        img = screen.render(self._display.width, self._display.height)
+        return self._render("Status: Down", img, 3.0)
+
+    def status_board_recovered(self, screen: StatusBoardScreen) -> str:
+        for cat in screen._categories:
+            for key in list(cat.items.keys()):
+                cat.items[key] = ServiceStatus.OK
+        screen._last_render_hash = None
+        img = screen.render(self._display.width, self._display.height)
+        return self._render("Status: Recovered", img, 3.0)
+
+    def tamagotchi_mood(self, screen: TamagotchiScreen, status: str, label: str) -> str:
+        _inject_mock_tamagotchi(screen, status)
+        screen._last_render_hash = None
+        img = screen.render(self._display.width, self._display.height)
+        return self._render(f"Tamagotchi: {label}", img, 3.0)
+
+    def agent_feed(self, screen: AgentFeedScreen, scenario: str, label: str) -> str:
+        _inject_mock_agent_feed(screen, scenario)
+        screen._last_hash = None
+        img = screen.render(self._display.width, self._display.height)
+        return self._render(f"Agents: {label}", img, 4.0)
+
+    def device_status(self, screen: DeviceStatusScreen) -> str:
+        _inject_mock_device_status(screen)
+        screen._last_hash = None
+        img = screen.render(self._display.width, self._display.height)
+        return self._render("Device Status", img, 4.0)
+
+    def ui_template(self, name: str) -> str:
+        from ui.templates import render as tpl_render
+        from ui.preview import MOCK_DATA
+
+        data = MOCK_DATA.get(name, {"name": name})
+        img = tpl_render(name, data)
+        label = f"ui:{name}"
+        return self._render(label, img, 3.0)
+
+    def idle_screen(self) -> str:
+        from ui.templates import render as tpl_render
+        from ui.preview import MOCK_DATA
+
+        img = tpl_render("idle", MOCK_DATA["idle"])
+        return self._render("Idle", img, 3.0)
+
+    def error_screen(self) -> str:
+        from ui.templates import render as tpl_render
+        from ui.preview import MOCK_DATA
+
+        img = tpl_render("error", MOCK_DATA["error"])
+        return self._render("Error", img, 3.0)
+
+    @property
+    def frames(self) -> List[str]:
+        return list(self._frames)
+
+    def make_gif(
+        self, output_path: str = "out/demo_animation.gif", scale: int = 4
+    ) -> str:
+        from PIL import Image
+
+        if not self._frames:
+            raise RuntimeError("No frames to compose into GIF")
+
+        images = []
+        for path in self._frames:
+            img = Image.open(path)
+            resized = img.resize((img.width * scale, img.height * scale), Image.NEAREST)
+            images.append(resized.convert("RGB"))
+
+        os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
+        images[0].save(
+            output_path,
+            save_all=True,
+            append_images=images[1:],
+            duration=800,
+            loop=0,
+        )
+        return output_path
+
+    def make_contact_sheet(
+        self,
+        output_path: str = "out/demo_contact_sheet.png",
+        scale: int = 4,
+    ) -> str:
+        from PIL import Image, ImageDraw
+
+        if not self._frames:
+            raise RuntimeError("No frames to compose into contact sheet")
+
+        images = []
+        for path in self._frames:
+            try:
+                images.append(Image.open(path))
+            except Exception:
+                continue
+
+        if not images:
+            raise RuntimeError("No images to compose")
+
+        cols = 4
+        rows = (len(images) + cols - 1) // cols
+        gap = 4
+        label_h = 12
+
+        sample_w, sample_h = images[0].size
+        cell_w = sample_w * scale + gap
+        cell_h = sample_h * scale + gap + label_h
+
+        sheet_w = cols * cell_w + gap
+        sheet_h = rows * cell_h + gap
+
+        sheet = Image.new("1", (sheet_w, sheet_h), 255)
+        draw = ImageDraw.Draw(sheet)
+
+        for i, img in enumerate(images):
+            col = i % cols
+            row = i // cols
+            x = gap + col * cell_w
+            y = gap + row * cell_h
+
+            resized = img.resize((sample_w * scale, sample_h * scale), Image.NEAREST)
+            sheet.paste(resized, (x, y))
+
+            basename = os.path.basename(self._frames[i]).replace(".png", "")
+            parts = basename.split("_", 1)
+            label = parts[1] if len(parts) > 1 else basename
+            label_y = y + sample_h * scale + 1
+            draw.text((x, label_y), label, fill=0)
+
+        os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
+        sheet.save(output_path, format="PNG")
+        return output_path
+
+
+def _run_demo(
     screens: List[Screen],
     display: DisplayBackend,
     cfg: AppConfig,
-    animate: bool = False,
-) -> List[str]:
-    is_real_hw = cfg.display.backend != "mock"
-    output_paths: List[str] = []
+    fast: bool = False,
+    include_ui: bool = False,
+) -> DemoSequence:
+    seq = DemoSequence(display, cfg, fast=fast)
 
-    for idx, screen in enumerate(screens):
+    print("  === Boot Sequence ===")
+    seq.boot()
+
+    has_status = False
+    has_tamagotchi = False
+    has_agent_feed = False
+    has_device_status = False
+
+    for screen in screens:
         if isinstance(screen, StatusBoardScreen):
-            _inject_mock_status_board(screen)
-            img = screen.render(display.width, display.height)
-            display.render_image(img)
-            out_path = f"out/demo_status_board_{screen._config.name.lower().replace(' ', '_')}.png"
-            img.save(out_path, format="PNG")
-            output_paths.append(out_path)
-            print(f"  Status board ({screen._config.name}) -> {out_path}")
-
-            if animate:
-                anim_paths = _animate_status_board(screen, display)
-                output_paths.extend(anim_paths)
+            has_status = True
+            print("\n  === Status Board ===")
+            seq.status_board_ok(screen)
+            seq.status_board_degraded(screen)
+            seq.status_board_down(screen)
+            seq.status_board_recovered(screen)
 
         elif isinstance(screen, TamagotchiScreen):
-            _inject_mock_tamagotchi(screen)
-            num_sprites = len(screen._sprites) or 4
-            for frame_idx in range(num_sprites):
-                screen._frame = frame_idx
-                img = screen.render(display.width, display.height)
-                display.render_image(img)
-                out_path = f"out/demo_tamagotchi_{screen._config.name.lower().replace(' ', '_')}_f{frame_idx + 1}.png"
-                img.save(out_path, format="PNG")
-                output_paths.append(out_path)
-                print(
-                    f"  Tamagotchi {screen._config.name} frame {frame_idx + 1}/{num_sprites} -> {out_path}"
-                )
-                if is_real_hw and frame_idx == 0:
-                    time.sleep(2)
-                elif is_real_hw:
-                    time.sleep(0.5)
+            has_tamagotchi = True
+            print("\n  === Tamagotchi ===")
+            seq.tamagotchi_mood(screen, "ok", "Idle")
+            seq.tamagotchi_mood(screen, "working", "Working")
+            seq.tamagotchi_mood(screen, "error", "Error")
+            seq.tamagotchi_mood(screen, "success", "Success")
 
         elif isinstance(screen, AgentFeedScreen):
-            _inject_mock_agent_feed(screen)
-            img = screen.render(display.width, display.height)
-            display.render_image(img)
-            out_path = f"out/demo_agent_feed_{screen._config.name.lower().replace(' ', '_')}.png"
-            img.save(out_path, format="PNG")
-            output_paths.append(out_path)
-            print(f"  Agent feed ({screen._config.name}) -> {out_path}")
+            has_agent_feed = True
+            print("\n  === Agent Feed ===")
+            seq.agent_feed(screen, "all_ok", "All OK")
+            seq.agent_feed(screen, "mixed", "Mixed")
+            seq.agent_feed(screen, "errors", "Errors")
 
-        else:
-            if isinstance(screen, UiTemplateScreen):
-                from ui.preview import MOCK_DATA
+        elif isinstance(screen, DeviceStatusScreen):
+            has_device_status = True
+            print("\n  === Device Status ===")
+            seq.device_status(screen)
 
-                screen._data = MOCK_DATA.get(
-                    screen._template_name, {"name": screen._config.name}
-                )
-            img = screen.render(display.width, display.height)
-            display.render_image(img)
-            tpl = getattr(screen, "_template_name", "")
-            label = f"ui:{tpl}" if tpl else screen.__class__.__name__
-            safe_name = label.replace(":", "_").replace(" ", "_")
-            out_path = f"out/demo_{safe_name}.png"
-            img.save(out_path, format="PNG")
-            output_paths.append(out_path)
-            print(f"  {label} -> {out_path}")
+    if not has_device_status:
+        print("\n  === Device Status ===")
+        ds = DeviceStatusScreen(ScreenConfig(name="Device", template="device_status"))
+        _inject_mock_device_status(ds)
+        ds.last_hash = None
+        img = ds.render(display.width, display.height)
+        seq._render("Device Status", img, 4.0)
 
-    return output_paths
+    if include_ui or not (has_status or has_tamagotchi or has_agent_feed):
+        print("\n  === UI Templates ===")
+        for name in ["idle", "error"]:
+            seq.ui_template(name)
 
+    print("\n  === Closing ===")
+    seq.idle_screen()
 
-def _animate_status_board(
-    screen: StatusBoardScreen, display: DisplayBackend
-) -> List[str]:
-    print("  Animating status changes (partial refresh)...")
-    output_paths: List[str] = []
-
-    for cat in screen._categories:
-        if cat.name == "Claude":
-            cat.items["API"] = ServiceStatus.DEGRADED
-    screen._last_render_hash = None
-    img = screen.render(display.width, display.height)
-    display.render_image(img)
-    out_path = "out/demo_status_degraded.png"
-    img.save(out_path, format="PNG")
-    output_paths.append(out_path)
-    print(f"    Claude API -> [!] DEGRADED -> {out_path}")
-    time.sleep(2)
-
-    for cat in screen._categories:
-        if cat.name == "OpenAI":
-            cat.items["App"] = ServiceStatus.DOWN
-    screen._last_render_hash = None
-    img = screen.render(display.width, display.height)
-    display.render_image(img)
-    out_path = "out/demo_status_down.png"
-    img.save(out_path, format="PNG")
-    output_paths.append(out_path)
-    print(f"    OpenAI App -> [-] DOWN -> {out_path}")
-    time.sleep(2)
-
-    for cat in screen._categories:
-        for key in list(cat.items.keys()):
-            cat.items[key] = ServiceStatus.OK
-    screen._last_render_hash = None
-    img = screen.render(display.width, display.height)
-    display.render_image(img)
-    out_path = "out/demo_status_ok.png"
-    img.save(out_path, format="PNG")
-    output_paths.append(out_path)
-    print(f"    All -> [+] OK -> {out_path}")
-    time.sleep(1)
-
-    return output_paths
-
-
-def _demo_ui_templates(output_dir: str = "out") -> List[str]:
-    from ui.preview import render_template
-    from ui import templates
-
-    output_paths: List[str] = []
-    for name in templates.names():
-        path = render_template(name, output_dir=output_dir)
-        out_path = os.path.join(output_dir, f"demo_ui_{name}.png")
-        os.rename(path, out_path)
-        output_paths.append(out_path)
-        print(f"  ui:{name} -> {out_path}")
-    return output_paths
-
-
-def _demo_contact_sheet(
-    paths: List[str], output_path: str = "out/demo_contact_sheet.png"
-) -> str:
-    from PIL import Image
-
-    images = []
-    for p in paths:
-        try:
-            images.append(Image.open(p))
-        except Exception:
-            continue
-
-    if not images:
-        raise RuntimeError("No images to compose into contact sheet")
-
-    scale = 2
-    cols = 4
-    rows = (len(images) + cols - 1) // cols
-    gap = 4
-    label_h = 10
-
-    sample_w, sample_h = images[0].size
-    cell_w = sample_w * scale + gap
-    cell_h = sample_h * scale + gap + label_h
-
-    sheet_w = cols * cell_w + gap
-    sheet_h = rows * cell_h + gap
-
-    sheet = Image.new("1", (sheet_w, sheet_h), 255)
-
-    from PIL import ImageDraw, ImageFont
-
-    draw = ImageDraw.Draw(sheet)
-
-    for i, img in enumerate(images):
-        col = i % cols
-        row = i // cols
-        x = gap + col * cell_w
-        y = gap + row * cell_h
-
-        resized = img.resize((sample_w * scale, sample_h * scale), Image.NEAREST)
-        sheet.paste(resized, (x, y))
-
-        basename = os.path.basename(paths[i]).replace(".png", "").replace("demo_", "")
-        label_y = y + sample_h * scale + 1
-        draw.text((x, label_y), basename, fill=0)
-
-    os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
-    sheet.save(output_path, format="PNG")
-    return output_path
+    return seq
 
 
 def main() -> None:
@@ -350,27 +495,27 @@ def main() -> None:
     )
 
     demo_parser = subparsers.add_parser(
-        "demo", help="Render each screen with mock data (no network needed)"
+        "demo", help="Full demo: boot, screen cycling, state animations, GIF output"
     )
     demo_parser.add_argument(
-        "--animate",
+        "--fast",
         action="store_true",
-        help="Animate status changes to test partial refresh",
+        help="Skip delays (instant render, still produces GIF)",
     )
     demo_parser.add_argument(
         "--all",
         action="store_true",
-        help="Also render all ui/ templates (boot, idle, error, etc.)",
+        help="Include all ui/ templates in demo sequence",
     )
     demo_parser.add_argument(
         "--contact-sheet",
         action="store_true",
-        help="Generate a contact sheet grid of all rendered screens",
+        help="Generate a contact sheet grid of all demo frames",
     )
     demo_parser.add_argument(
         "--show",
         action="store_true",
-        help="Open rendered images in system viewer",
+        help="Open GIF and contact sheet in system viewer after completion",
     )
 
     subparsers.add_parser("doctor", help="Validate configuration and environment")
@@ -438,28 +583,35 @@ def main() -> None:
     if args.command == "demo":
         display = get_display(cfg.display)
         screens = create_screens(cfg)
-        os.makedirs("out", exist_ok=True)
-        print("Demo mode: rendering with mock data (no network)")
+        print(f"\n=== {APP_NAME.title()} Demo ===\n")
+        if not getattr(args, "fast", False):
+            print("  (use --fast to skip delays)\n")
         try:
-            output_paths = _demo(
-                screens, display, cfg=cfg, animate=getattr(args, "animate", False)
+            seq = _run_demo(
+                screens,
+                display,
+                cfg=cfg,
+                fast=getattr(args, "fast", False),
+                include_ui=getattr(args, "all", False),
             )
         finally:
             display.close()
 
-        if getattr(args, "all", False):
-            print("\nRendering ui/ templates...")
-            ui_paths = _demo_ui_templates()
-            output_paths.extend(ui_paths)
+        gif_path = seq.make_gif()
+        print(f"\n  Animation -> {gif_path}")
+
+        open_paths = [gif_path]
 
         if getattr(args, "contact_sheet", False):
-            cs_path = _demo_contact_sheet(output_paths)
-            output_paths.append(cs_path)
-            print(f"\nContact sheet -> {cs_path}")
+            cs_path = seq.make_contact_sheet()
+            print(f"  Contact sheet -> {cs_path}")
+            open_paths.append(cs_path)
 
-        print(f"\nDemo complete. {len(output_paths)} frame(s) rendered to out/")
+        print(f"  {len(seq.frames)} frame(s) -> {seq._output_dir}/")
+
         if getattr(args, "show", False):
-            _show_images(output_paths)
+            _show_images(open_paths)
+
         return
 
     if args.command == "once":
@@ -551,6 +703,13 @@ def _doctor(config_dir: str) -> None:
             break
         except ImportError:
             print(f"waveshare_epd {ver}: NOT INSTALLED")
+
+    try:
+        import pisugar
+
+        print(f"pisugar: {pisugar.__version__}")
+    except ImportError:
+        print("pisugar: NOT INSTALLED (pip install pisugar)")
 
     try:
         import subprocess as _sp
