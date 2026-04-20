@@ -16,21 +16,8 @@ from PIL import Image
 
 from .base import Screen
 from ..config import ScreenConfig
-from ui.canvas import Canvas
-from ui import layout, MARGIN
 
 logger = logging.getLogger(__name__)
-
-_STATUS_ICONS = {
-    "idle": "[+]",
-    "ok": "[+]",
-    "working": "[!]",
-    "waiting_input": "[!]",
-    "stuck": "[-]",
-    "error": "[-]",
-    "offline": "[-]",
-    "success": "[*]",
-}
 
 
 async def _fetch_agent(session: Any, name: str, url: str) -> Dict[str, Any]:
@@ -98,46 +85,28 @@ class AgentFeedScreen(Screen):
         self._agents_data = processed
 
     def render(self, width: int, height: int) -> Image.Image:
-        c = Canvas(width, height)
+        from ui.templates import render as tpl_render
+        from ui.canvas import Canvas
 
-        c.text((MARGIN, 3), self._config.name, fill=0)
-        c.hline(14, fill=0)
+        agents = []
+        for a in self._agents_data:
+            agents.append(
+                {
+                    "name": a.get("name", "?"),
+                    "status": a.get("status", ""),
+                    "message": a.get("message", ""),
+                    "fetch_error": bool(a.get("__fetch_error")),
+                }
+            )
 
-        y = 18
-        for agent in self._agents_data:
-            if y + layout.LINE_H * 2 > height - layout.FOOTER_RESERVE:
-                layout.overflow_marker(c, y)
-                break
-
-            name = agent.get("name", "?")
-            if len(name) > 12:
-                name = name[:9] + "..."
-
-            status = str(agent.get("status", "")).lower()
-            if agent.get("__fetch_error"):
-                status = "offline"
-            icon = _STATUS_ICONS.get(status, "[?]")
-
-            row = f"{icon} {name}"
-            if status and status not in ("idle", "ok"):
-                row += f"  {status}"
-            c.text((MARGIN, y), row, fill=0)
-            y += layout.LINE_H
-
-            msg = agent.get("message", "")
-            if msg:
-                if len(msg) > 22:
-                    msg = msg[:19] + "..."
-                c.text((MARGIN + 8, y), msg, fill=0)
-                y += layout.LINE_H_SMALL
-
-        footer_y = height - layout.LINE_H - 2
-        now = datetime.now(timezone.utc).strftime("%H:%M:%S")
-        n = len(self._agents_data)
-        c.text((MARGIN, footer_y), f"{n} agent(s) | {now}", fill=0)
+        data = {
+            "name": self._config.name,
+            "agents": agents,
+            "num_agents": len(self._agents_data),
+        }
 
         self._last_hash = self._data_hash()
-        return c.to_image()
+        return tpl_render("agent_feed", data, canvas=Canvas(width, height))
 
     def has_changed(self) -> bool:
         if self._last_hash is None:

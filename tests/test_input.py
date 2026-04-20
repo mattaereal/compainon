@@ -8,12 +8,12 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from ai_health_board.input import InputManager, PID_FILE
-from ai_health_board.screens.status_board import StatusBoardScreen
-from ai_health_board.screens.tamagotchi import TamagotchiScreen
-from ai_health_board.screens.base import Screen
-from ai_health_board.config import ScreenConfig
-from ai_health_board.scheduler import _interruptible_sleep
+from core.input import InputManager, PID_FILE
+from core.screens.status_board import StatusBoardScreen
+from core.screens.tamagotchi import TamagotchiScreen
+from core.screens.base import Screen
+from core.config import ScreenConfig
+from core.scheduler import _interruptible_sleep
 
 
 def _cleanup_pid():

@@ -11,19 +11,19 @@ import time
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
-from ai_health_board.config import load_config, AppConfig, ScreenConfig
-from ai_health_board.display import get_display
-from ai_health_board.display.base import DisplayBackend
-from ai_health_board.screens import create_screens
-from ai_health_board.screens.base import Screen
-from ai_health_board.screens.status_board import StatusBoardScreen, CategoryData
-from ai_health_board.screens.tamagotchi import TamagotchiScreen
-from ai_health_board.screens.agent_feed import AgentFeedScreen
-from ai_health_board.screens.device_status import DeviceStatusScreen
-from ai_health_board.screens.ui_template import UiTemplateScreen
-from ai_health_board.scheduler import screen_loop
-from ai_health_board.input import InputManager
-from ai_health_board.models import ServiceStatus
+from core.config import load_config, AppConfig, ScreenConfig
+from core.display import get_display
+from core.display.base import DisplayBackend
+from core.screens import create_screens
+from core.screens.base import Screen
+from core.screens.status_board import StatusBoardScreen, CategoryData
+from core.screens.tamagotchi import TamagotchiScreen
+from core.screens.agent_feed import AgentFeedScreen
+from core.screens.device_status import DeviceStatusScreen
+from core.screens.ui_template import UiTemplateScreen
+from core.scheduler import screen_loop
+from core.input import InputManager
+from core.models import ServiceStatus
 
 APP_NAME = "tamagotchai"
 PID_FILE = f"/tmp/{APP_NAME}.pid"
@@ -543,7 +543,7 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    from ai_health_board.logging_setup import setup_logging
+    from core.logging_setup import setup_logging
 
     setup_logging()
 
@@ -666,7 +666,7 @@ def _doctor(config_dir: str) -> None:
         sys.exit(1)
 
     try:
-        import ai_health_board
+        import core
 
         print("Imports: OK")
     except Exception as e:

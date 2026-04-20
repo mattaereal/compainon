@@ -11,16 +11,13 @@ import os
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from PIL import Image, ImageDraw
+from PIL import Image
 
 from .base import Screen
 from ..config import ScreenConfig, StatusBoardCategory, resolve_key
 from ..models import ServiceStatus, ComponentStatus, ProviderStatus
 from ..providers import get_provider
 from ..cache import load_cache, save_cache
-from ui.canvas import Canvas
-from ui import layout, MARGIN
-from ui.assets import get_icon, resolve_icon_key
 
 logger = logging.getLogger(__name__)
 
@@ -164,30 +161,41 @@ class StatusBoardScreen(Screen):
         self._last_refresh = datetime.now(timezone.utc)
 
     def render(self, width: int, height: int) -> Image.Image:
-        c = Canvas(width, height)
+        from ui.templates import render as tpl_render
+        from ui.canvas import Canvas
+        from ui.assets import resolve_icon_key
+
+        tpl_categories = []
+        for cat in self._categories:
+            icon_key = cat.icon_key
+            if icon_key == "generic":
+                icon_key = resolve_icon_key(cat.name, "")
+            items = [
+                {"label": label, "status": status.value}
+                for label, status in cat.items.items()
+            ]
+            tpl_categories.append(
+                {
+                    "name": cat.name,
+                    "icon": icon_key,
+                    "items": items,
+                }
+            )
+
         timestamp = (
             self._last_refresh.strftime("%H:%M:%S") if self._last_refresh else ""
         )
-        y = layout.header(c, self._config.name, MARGIN, timestamp)
-
-        for cat in self._categories:
-            if layout.is_overflow(y, c.h):
-                y = layout.overflow_marker(c, y)
-                break
-
-            icon_img = get_icon(cat.icon_key)
-            y = layout.category_row(c, cat.name, icon_img, y)
-
-            for label, status in cat.items.items():
-                if layout.is_overflow(y, c.h):
-                    break
-                y = layout.item_row(c, label, status.value, y)
-
         footer_text = "ok" if self._last_refresh else "no data"
-        layout.footer(c, footer_text)
+
+        data = {
+            "name": self._config.name,
+            "timestamp": timestamp,
+            "categories": tpl_categories,
+            "footer_text": footer_text,
+        }
 
         self._last_render_hash = self._hash()
-        return c.to_image()
+        return tpl_render("status_board", data, canvas=Canvas(width, height))
 
     def has_changed(self) -> bool:
         if self._last_render_hash is None:

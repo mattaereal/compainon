@@ -5,7 +5,7 @@ import logging
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional
 
-from ai_health_board.models import ComponentStatus, ProviderStatus, ServiceStatus
+from core.models import ComponentStatus, ProviderStatus, ServiceStatus
 
 logger = logging.getLogger(__name__)
 

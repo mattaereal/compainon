@@ -47,7 +47,7 @@ fi
 
 # Core imports
 echo -n "Core imports: "
-if python3 -c "import ai_health_board, ai_health_board.config, ai_health_board.models" 2>/dev/null; then
+if python3 -c "import core, core.config, core.models" 2>/dev/null; then
     echo "OK"
 else
     echo "FAIL"

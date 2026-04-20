@@ -10,12 +10,10 @@ import os
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from PIL import Image, ImageDraw
+from PIL import Image
 
 from .base import Screen
 from ..config import ScreenConfig, resolve_key
-from ui.canvas import Canvas
-from ui import layout, MARGIN
 from ui.assets import load_sprite
 
 logger = logging.getLogger(__name__)
@@ -105,57 +103,32 @@ class TamagotchiScreen(Screen):
             self._mood = mm.error
 
     def render(self, width: int, height: int) -> Image.Image:
-        c = Canvas(width, height)
+        from ui.templates import render as tpl_render
+        from ui.canvas import Canvas
 
-        c.text((MARGIN, 3), self._config.name, fill=0)
-        c.hline(14, fill=0)
-
-        sprite_y = 18
-        sprite = self._sprites.get(self._mood)
-        if not sprite:
-            available = list(self._sprites.values())
-            if available:
-                sprite = available[self._frame % len(available)]
-
-        if sprite:
-            sx = (c.w - _SPRITE_W) // 2
-            c.paste(sprite, (sx, sprite_y))
-        else:
-            _draw_fallback_face(c, self._mood, sprite_y, self._frame)
-
-        self._frame = (self._frame + 1) % max(len(self._sprites), 1)
-
-        text_y = sprite_y + _SPRITE_H + 6
-
+        info_lines = []
         if self._data.get("__fetch_error"):
-            c.text((MARGIN, text_y), "[-] connection error", fill=0)
+            pass
         else:
             for il in self._config.info_lines:
-                if text_y + layout.LINE_H_SMALL > height - layout.FOOTER_RESERVE:
-                    break
-
                 value = self._format_info_line(il)
                 if il.max_length and len(value) > il.max_length:
                     value = value[: il.max_length - 3] + "..."
-                label = il.label
-                text = f"{label}: {value}" if label else value
-                c.text((MARGIN, text_y), text, fill=0)
-                text_y += layout.LINE_H_SMALL
+                info_lines.append({"label": il.label, "value": value})
 
-        footer_y = height - layout.LINE_H - 2
-        last_checked = self._data.get("__last_checked", "")
-        if last_checked:
-            try:
-                dt = datetime.fromisoformat(last_checked)
-                ts = dt.strftime("%H:%M:%S")
-                c.text((MARGIN, footer_y), f"{self._mood} | {ts}", fill=0)
-            except (ValueError, TypeError):
-                c.text((MARGIN, footer_y), f"mood: {self._mood}", fill=0)
-        else:
-            c.text((MARGIN, footer_y), f"mood: {self._mood}", fill=0)
+        data = {
+            "name": self._config.name,
+            "mood": self._mood,
+            "frame": self._frame,
+            "sprites": self._sprites,
+            "info_lines": info_lines,
+            "fetch_error": bool(self._data.get("__fetch_error")),
+            "last_checked": self._data.get("__last_checked", ""),
+        }
 
+        self._frame = (self._frame + 1) % max(len(self._sprites), 1)
         self._last_render_data_hash = self._data_hash()
-        return c.to_image()
+        return tpl_render("tamagotchi", data, canvas=Canvas(width, height))
 
     def _format_info_line(self, il) -> str:
         if il.template and il.keys:
@@ -176,37 +149,3 @@ class TamagotchiScreen(Screen):
 
     def _data_hash(self) -> str:
         return str(sorted(self._data.items()))
-
-
-def _draw_fallback_face(c: Canvas, mood: str, top_y: int, frame: int) -> None:
-    cx = c.w // 2
-    cy = top_y + _SPRITE_H // 2
-    face_r = 28
-    eye_y = cy - 8
-    left_eye_x = cx - 10
-    right_eye_x = cx + 10
-
-    c.ellipse([cx - face_r, cy - face_r, cx + face_r, cy + face_r], outline=0, width=1)
-
-    if frame % 2 == 1 and mood != "error":
-        c.line([(left_eye_x - 3, eye_y), (left_eye_x + 3, eye_y)], fill=0, width=1)
-        c.line([(right_eye_x - 3, eye_y), (right_eye_x + 3, eye_y)], fill=0, width=1)
-    else:
-        c.ellipse([left_eye_x - 3, eye_y - 3, left_eye_x + 3, eye_y + 3], fill=0)
-        c.ellipse([right_eye_x - 3, eye_y - 3, right_eye_x + 3, eye_y + 3], fill=0)
-
-    mouth_y = cy + 10
-    if mood == "idle":
-        c.arc(
-            [cx - 8, mouth_y - 4, cx + 8, mouth_y + 6],
-            start=0,
-            end=180,
-            fill=0,
-            width=1,
-        )
-    elif mood == "working":
-        c.line([(cx - 6, mouth_y), (cx + 6, mouth_y)], fill=0, width=1)
-    else:
-        c.arc(
-            [cx - 8, mouth_y, cx + 8, mouth_y + 10], start=180, end=360, fill=0, width=1
-        )

@@ -44,4 +44,16 @@ def render(
     return fn(c, data or {})
 
 
-from . import boot, setup, status_dashboard, detail, message, idle, error, device_status
+from . import (
+    boot,
+    setup,
+    status_dashboard,
+    detail,
+    message,
+    idle,
+    error,
+    device_status,
+    status_board,
+    tamagotchi,
+    agent_feed,
+)

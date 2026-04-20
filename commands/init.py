@@ -19,7 +19,7 @@ from typing import Any, Dict, List, Optional
 
 import yaml
 
-from ai_health_board.config import DISPLAY_PROFILES
+from core.config import DISPLAY_PROFILES
 
 
 DISPLAY_CHOICES = [

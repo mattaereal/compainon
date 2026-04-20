@@ -8,7 +8,7 @@ import logging
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from ai_health_board.config import load_config, AppConfig, DisplayConfig
+from core.config import load_config, AppConfig, DisplayConfig
 
 
 def test_load_valid_config():

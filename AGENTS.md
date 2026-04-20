@@ -38,11 +38,11 @@ python app.py init
 # Run tests
 python -m pytest tests/ -v
 
-# Render with mock data (no network needed)
+# Full demo with boot sequence, animations, and GIF output
 python app.py demo
 
-# Animate status changes (partial refresh test)
-python app.py demo --animate
+# Fast demo (skip delays, still produces GIF)
+python app.py demo --fast
 
 # Preview current state
 python app.py preview
@@ -55,6 +55,22 @@ python app.py ui-preview
 ```
 
 ## Architecture
+
+### Package Structure
+
+The project is organized into top-level packages with clear separation of concerns:
+
+| Package | Purpose | Depends on |
+|---|---|---|
+| `core/` | App runtime: config, display drivers, providers, screen data-fetching, scheduler | `ui/` (templates only, for render delegation) |
+| `ui/` | All rendering: canvas, layout, templates, assets, image tools | Nothing (zero inbound deps) |
+| `commands/` | CLI commands (init wizard) | `core/` (config) |
+| `config/` | YAML configuration files | N/A (data only) |
+| `wifi/` | WiFi onboarding subsystem (self-contained Flask app) | Nothing at import time |
+
+Dependency flow: `ui/` (leaf) <- `core/` <- `commands/` <- `app.py` (root)
+
+`core/screens/` delegates all pixel rendering to `ui/templates/`. Each screen's `render()` method converts its internal data to a plain dict and calls a registered template function. This keeps all Canvas/layout/assets usage inside `ui/` and all data-fetching/config logic inside `core/`.
 
 ### Configuration
 
@@ -93,7 +109,12 @@ Screens are defined in YAML config using templates:
    - Applies stale detection per-agent using `stale_threshold`
    - Status icons: `[+]` idle/ok, `[!]` working/waiting_input, `[-]` error/stuck/offline, `[*]` success
 
-4. **`ui:<name>`** - Any registered ui/ template (boot, setup, idle, error, message, etc.)
+4. **`device_status`** - Local device vitals
+   - Shows hostname, IP, SSID, BSSID, WiFi status, signal, CPU temp, memory, disk, uptime, battery, PID, version
+   - No URL needed -- gathers data from local system calls (stdlib + subprocess)
+   - Battery reads from PiSugar (requires `pisugar` pip package on Pi)
+
+5. **`ui:<name>`** - Any registered ui/ template (boot, setup, idle, error, message, etc.)
    - Wrapped as `UiTemplateScreen` for the scheduler
    - Can also use bare name (e.g. `template: idle`) if it matches a ui/ template
 
@@ -119,15 +140,20 @@ Width/height are auto-set from the backend profile in `DISPLAY_PROFILES` (define
 ### Key Files
 
 ```
-ai_health_board/
+core/
   config.py              # Data classes + YAML loading (3-file config, DISPLAY_PROFILES)
   input.py               # InputManager - PiSugar button signals (SIGUSR1/SIGUSR2), PID file
   wifi_display_hook.py   # Display hook for wifi onboarding (renders setup info on e-paper)
+  models.py              # ServiceStatus, ComponentStatus, ProviderStatus, AppState
+  cache.py               # Cache load/save for provider results
+  logging_setup.py       # Logging configuration
+  scheduler.py           # Async screen-cycling loop with input interruption
   screens/
     base.py              # Screen ABC (fetch, render, poll_interval, display_duration, has_changed)
-    status_board.py      # Status board template + pixel art icon generators
-    tamagotchi.py         # Tamagotchi template (config-driven sprites, mood_map, info_lines)
-    agent_feed.py        # Agent feed template (multi-agent compact list)
+    status_board.py      # Status board screen (fetch + render delegates to ui/templates/status_board)
+    tamagotchi.py        # Tamagotchi screen (fetch + mood resolve, render delegates to ui/templates/tamagotchi)
+    agent_feed.py        # Agent feed screen (fetch, render delegates to ui/templates/agent_feed)
+    device_status.py     # Device status screen (local system calls, render delegates to ui/templates/device_status)
     ui_template.py       # UiTemplateScreen - wraps ui/ templates as Screen instances
   display/
     base.py              # DisplayBackend ABC (render, render_image, flush, close)
@@ -144,14 +170,23 @@ ai_health_board/
   providers/
     base.py              # StatusProvider ABC
     statuspage.py        # Atlassian Statuspage adapter
-  scheduler.py           # Async screen-cycling loop with input interruption
-  models.py              # ServiceStatus, ComponentStatus, ProviderStatus, AppState
 ui/
   canvas.py              # Core rendering surface (PIL 1-bit wrapper)
   layout.py              # Layout primitives (header, item_row, footer, etc.)
   fonts.py               # Font loading (PIL default bitmap, TTF-ready)
   assets/__init__.py     # Pixel art icons (anthropic, openai, lotus, generic) + sprite loader
-  templates/             # Template registry + 7 screen templates
+  templates/             # Template registry + 11 screen templates
+    boot.py              # Boot/splash screen
+    setup.py             # WiFi setup instructions
+    status_dashboard.py  # Generic status dashboard (preview)
+    status_board.py      # Live status board rendering (used by core/screens/status_board.py)
+    tamagotchi.py        # Live tamagotchi rendering (used by core/screens/tamagotchi.py)
+    agent_feed.py        # Live agent feed rendering (used by core/screens/agent_feed.py)
+    device_status.py     # Device vitals rendering (used by core/screens/device_status.py)
+    detail.py            # Single service detail view
+    message.py           # Alert/notification screen
+    idle.py              # Idle/mascot screen
+    error.py             # Error/offline screen
   image_tools/           # Image preparation pipeline + dithering
   preview/               # Template preview renderer + contact sheet
 commands/
@@ -281,8 +316,11 @@ python -m pytest tests/ -v
 ```
 
 Tests are split into:
-- `test_layout.py` - Layout, canvas, fonts, assets
-- `test_new_modules.py` - Core modules (config, screens, providers, input)
+- `test_config.py` - Config loading and validation
+- `test_input.py` - InputManager, signal handling, debounce
+- `test_layout.py` - Layout, canvas, fonts, assets (core screens)
+- `test_new_modules.py` - Core modules (config, screens, providers, input, device_status)
+- `test_statuspage_provider.py` - Statuspage provider
 - `test_ui_layout.py` - UI canvas, layout, fonts, assets
 - `test_ui_templates.py` - UI templates, preview, UiTemplateScreen integration
 - `test_ui_image_tools.py` - Image tools, dithering, presets

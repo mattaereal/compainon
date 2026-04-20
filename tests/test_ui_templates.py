@@ -23,6 +23,9 @@ def test_template_registry():
     assert "idle" in n
     assert "error" in n
     assert "device_status" in n
+    assert "status_board" in n
+    assert "tamagotchi" in n
+    assert "agent_feed" in n
 
 
 def test_render_boot():
@@ -217,6 +220,133 @@ def test_render_device_status_with_data():
     assert img.size == (122, 250)
 
 
+def test_render_status_board():
+    from ui.templates import render
+
+    img = render("status_board")
+    assert img.size == (122, 250)
+    assert img.mode == "1"
+
+
+def test_render_status_board_with_data():
+    from ui.templates import render
+
+    img = render(
+        "status_board",
+        {
+            "name": "AI Health",
+            "timestamp": "14:32:05",
+            "categories": [
+                {
+                    "name": "Claude",
+                    "icon": "anthropic",
+                    "items": [
+                        {"label": "AI", "status": "OK"},
+                        {"label": "API", "status": "DEGRADED"},
+                    ],
+                },
+                {
+                    "name": "OpenAI",
+                    "icon": "openai",
+                    "items": [
+                        {"label": "App", "status": "DOWN"},
+                    ],
+                },
+            ],
+            "footer_text": "ok",
+        },
+    )
+    assert img.size == (122, 250)
+
+
+def test_render_tamagotchi():
+    from ui.templates import render
+
+    img = render("tamagotchi")
+    assert img.size == (122, 250)
+    assert img.mode == "1"
+
+
+def test_render_tamagotchi_with_data():
+    from ui.templates import render
+
+    img = render(
+        "tamagotchi",
+        {
+            "name": "Lotus",
+            "mood": "working",
+            "frame": 0,
+            "sprites": {},
+            "info_lines": [
+                {"label": "status", "value": "working"},
+                {"label": "pending", "value": "3"},
+            ],
+            "fetch_error": False,
+            "last_checked": "2026-04-19T14:32:05+00:00",
+        },
+    )
+    assert img.size == (122, 250)
+
+
+def test_render_tamagotchi_fetch_error():
+    from ui.templates import render
+
+    img = render(
+        "tamagotchi",
+        {
+            "name": "Lotus",
+            "mood": "error",
+            "frame": 0,
+            "sprites": {},
+            "info_lines": [],
+            "fetch_error": True,
+            "last_checked": "",
+        },
+    )
+    assert img.size == (122, 250)
+
+
+def test_render_agent_feed():
+    from ui.templates import render
+
+    img = render("agent_feed")
+    assert img.size == (122, 250)
+    assert img.mode == "1"
+
+
+def test_render_agent_feed_with_data():
+    from ui.templates import render
+
+    img = render(
+        "agent_feed",
+        {
+            "name": "Agents",
+            "agents": [
+                {
+                    "name": "OpenCode",
+                    "status": "working",
+                    "message": "Coding",
+                    "fetch_error": False,
+                },
+                {
+                    "name": "Cursor",
+                    "status": "idle",
+                    "message": "",
+                    "fetch_error": False,
+                },
+                {
+                    "name": "Lotus",
+                    "status": "error",
+                    "message": "Crashed",
+                    "fetch_error": True,
+                },
+            ],
+            "num_agents": 3,
+        },
+    )
+    assert img.size == (122, 250)
+
+
 def test_template_unknown_raises():
     from ui.templates import render
 
@@ -263,8 +393,8 @@ def test_preview_render_all():
 
 
 def test_ui_template_screen_render():
-    from ai_health_board.config import ScreenConfig
-    from ai_health_board.screens.ui_template import UiTemplateScreen
+    from core.config import ScreenConfig
+    from core.screens.ui_template import UiTemplateScreen
 
     cfg = ScreenConfig(name="Boot", template="ui:boot")
     screen = UiTemplateScreen(cfg, "boot")
@@ -274,8 +404,8 @@ def test_ui_template_screen_render():
 
 
 def test_ui_template_screen_has_changed():
-    from ai_health_board.config import ScreenConfig
-    from ai_health_board.screens.ui_template import UiTemplateScreen
+    from core.config import ScreenConfig
+    from core.screens.ui_template import UiTemplateScreen
 
     cfg = ScreenConfig(name="Boot", template="ui:boot")
     screen = UiTemplateScreen(cfg, "boot")
@@ -285,8 +415,8 @@ def test_ui_template_screen_has_changed():
 
 
 def test_ui_template_screen_poll_interval():
-    from ai_health_board.config import ScreenConfig
-    from ai_health_board.screens.ui_template import UiTemplateScreen
+    from core.config import ScreenConfig
+    from core.screens.ui_template import UiTemplateScreen
 
     cfg = ScreenConfig(
         name="Boot", template="ui:boot", poll_interval=60, display_duration=10
@@ -297,7 +427,7 @@ def test_ui_template_screen_poll_interval():
 
 
 def test_ui_template_screen_is_ui_template():
-    from ai_health_board.screens.ui_template import UiTemplateScreen
+    from core.screens.ui_template import UiTemplateScreen
 
     assert UiTemplateScreen.is_ui_template("ui:boot") is True
     assert UiTemplateScreen.is_ui_template("ui:error") is True
@@ -309,7 +439,7 @@ def test_ui_template_screen_is_ui_template():
 
 
 def test_ui_template_screen_strip_prefix():
-    from ai_health_board.screens.ui_template import UiTemplateScreen
+    from core.screens.ui_template import UiTemplateScreen
 
     assert UiTemplateScreen.strip_prefix("ui:boot") == "boot"
     assert UiTemplateScreen.strip_prefix("ui:error") == "error"
@@ -317,9 +447,9 @@ def test_ui_template_screen_strip_prefix():
 
 
 def test_create_screens_with_ui_template():
-    from ai_health_board.config import AppConfig, ScreenConfig
-    from ai_health_board.screens import create_screens
-    from ai_health_board.screens.ui_template import UiTemplateScreen
+    from core.config import AppConfig, ScreenConfig
+    from core.screens import create_screens
+    from core.screens.ui_template import UiTemplateScreen
 
     cfg = AppConfig(screens=[ScreenConfig(name="Boot", template="ui:boot")])
     screens = create_screens(cfg)
@@ -329,9 +459,9 @@ def test_create_screens_with_ui_template():
 
 
 def test_create_screens_with_bare_ui_template():
-    from ai_health_board.config import AppConfig, ScreenConfig
-    from ai_health_board.screens import create_screens
-    from ai_health_board.screens.ui_template import UiTemplateScreen
+    from core.config import AppConfig, ScreenConfig
+    from core.screens import create_screens
+    from core.screens.ui_template import UiTemplateScreen
 
     cfg = AppConfig(screens=[ScreenConfig(name="Idle", template="idle")])
     screens = create_screens(cfg)
@@ -341,10 +471,10 @@ def test_create_screens_with_bare_ui_template():
 
 
 def test_create_screens_mixed_templates():
-    from ai_health_board.config import AppConfig, ScreenConfig
-    from ai_health_board.screens import create_screens
-    from ai_health_board.screens.ui_template import UiTemplateScreen
-    from ai_health_board.screens.status_board import StatusBoardScreen
+    from core.config import AppConfig, ScreenConfig
+    from core.screens import create_screens
+    from core.screens.ui_template import UiTemplateScreen
+    from core.screens.status_board import StatusBoardScreen
 
     cfg = AppConfig(
         screens=[
@@ -361,8 +491,8 @@ def test_create_screens_mixed_templates():
 
 
 def test_create_screens_unknown_template_raises():
-    from ai_health_board.config import AppConfig, ScreenConfig
-    from ai_health_board.screens import create_screens
+    from core.config import AppConfig, ScreenConfig
+    from core.screens import create_screens
 
     cfg = AppConfig(screens=[ScreenConfig(name="Bad", template="unknown_xyz")])
     try:

@@ -3,8 +3,8 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from ai_health_board.providers.statuspage import StatuspageProvider
-from ai_health_board.models import ServiceStatus
+from core.providers.statuspage import StatuspageProvider
+from core.models import ServiceStatus
 
 
 def test_normalize_operational():

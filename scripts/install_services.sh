@@ -139,7 +139,7 @@ Environment=WIFI_SETUP_IDLE_TIMEOUT=600
 Environment=WIFI_SETUP_HOTSPOT_SSID=TAMAGOTCHAI-SETUP
 Environment=WIFI_SETUP_HOTSPOT_IP=10.42.0.1
 Environment=WIFI_SETUP_WEB_PORT=80
-Environment=WIFI_SETUP_DISPLAY_HOOK=ai_health_board.wifi_display_hook
+Environment=WIFI_SETUP_DISPLAY_HOOK=core.wifi_display_hook
 Environment=PYTHONPATH=${REPO_DIR}
 
 [Install]
@@ -173,7 +173,7 @@ Environment=WIFI_SETUP_IDLE_TIMEOUT=600
 Environment=WIFI_SETUP_HOTSPOT_SSID=TAMAGOTCHAI-SETUP
 Environment=WIFI_SETUP_HOTSPOT_IP=10.42.0.1
 Environment=WIFI_SETUP_WEB_PORT=80
-Environment=WIFI_SETUP_DISPLAY_HOOK=ai_health_board.wifi_display_hook
+Environment=WIFI_SETUP_DISPLAY_HOOK=core.wifi_display_hook
 Environment=PYTHONPATH=${REPO_DIR}
 
 [Install]

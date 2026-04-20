@@ -3,7 +3,7 @@
 When the wifi-setup service activates, it calls show_setup_info()
 to render setup instructions on the e-paper display.
 
-This module is loaded via WIFI_SETUP_DISPLAY_HOOK=ai_health_board.wifi_display_hook
+This module is loaded via WIFI_SETUP_DISPLAY_HOOK=core.wifi_display_hook
 set in the wifi-setup systemd service environment.
 """
 
@@ -22,8 +22,8 @@ def _get_display():
         return _DISPLAY
     try:
         sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-        from ai_health_board.config import load_config
-        from ai_health_board.display import get_display
+        from core.config import load_config
+        from core.display import get_display
 
         config = load_config(os.path.join(os.path.dirname(__file__), "..", "config"))
         _DISPLAY = get_display(config.display)

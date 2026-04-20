@@ -3,7 +3,7 @@ requires = ["setuptools>=64"]
 build-backend = "setuptools.backends._legacy:_Backend"
 
 [project]
-name = "ai-health-board"
+name = "tamagotchai"
 version = "1.0.0"
 description = "AI service status board for Raspberry Pi e-paper display"
 requires-python = ">=3.11"
@@ -22,7 +22,7 @@ pisugar = [
 ]
 
 [tool.setuptools]
-packages = ["ai_health_board", "ai_health_board.providers", "ai_health_board.render", "ai_health_board.display"]
+packages = ["core", "core.providers", "core.display", "core.screens"]
 package-dir = {"." = "."}
 include-package-data = true
 

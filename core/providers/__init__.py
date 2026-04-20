@@ -3,12 +3,12 @@
 import logging
 from typing import Dict, Any
 
-from ai_health_board.config import ProviderConfig
+from core.config import ProviderConfig
 
 logger = logging.getLogger(__name__)
 
 _BACKENDS: Dict[str, Any] = {
-    "statuspage": "ai_health_board.providers.statuspage.StatuspageProvider",
+    "statuspage": "core.providers.statuspage.StatuspageProvider",
 }
 
 

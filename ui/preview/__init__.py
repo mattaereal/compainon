@@ -100,6 +100,72 @@ MOCK_DATA = {
         "pid": "12345",
         "version": "1.0.0",
     },
+    "status_board": {
+        "name": "AI Health",
+        "timestamp": "14:32:05",
+        "categories": [
+            {
+                "name": "Claude",
+                "icon": "anthropic",
+                "items": [
+                    {"label": "AI", "status": "OK"},
+                    {"label": "Code", "status": "OK"},
+                    {"label": "API", "status": "OK"},
+                ],
+            },
+            {
+                "name": "OpenAI",
+                "icon": "openai",
+                "items": [
+                    {"label": "App", "status": "OK"},
+                    {"label": "Chat", "status": "OK"},
+                    {"label": "Web", "status": "OK"},
+                    {"label": "API", "status": "OK"},
+                ],
+            },
+            {
+                "name": "Lotus",
+                "icon": "lotus",
+                "items": [
+                    {"label": "Live", "status": "OK"},
+                    {"label": "Queue", "status": "OK"},
+                ],
+            },
+        ],
+        "footer_text": "ok",
+    },
+    "tamagotchi": {
+        "name": "Lotus",
+        "mood": "idle",
+        "frame": 0,
+        "sprites": {},
+        "info_lines": [
+            {"label": "status", "value": "ok"},
+            {"label": "pending", "value": "0"},
+            {"label": "PRs", "value": "+3 M1"},
+        ],
+        "fetch_error": False,
+        "last_checked": "2026-04-19T14:32:05+00:00",
+    },
+    "agent_feed": {
+        "name": "Agents",
+        "agents": [
+            {
+                "name": "OpenCode",
+                "status": "working",
+                "message": "Refactoring auth",
+                "fetch_error": False,
+            },
+            {"name": "Cursor", "status": "idle", "message": "", "fetch_error": False},
+            {
+                "name": "Lotus",
+                "status": "success",
+                "message": "PR merged",
+                "fetch_error": False,
+            },
+        ],
+        "num_agents": 3,
+    },
 }
 
 

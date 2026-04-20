@@ -7,9 +7,9 @@ from datetime import datetime, timezone, timedelta
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from ai_health_board.models import ServiceStatus
-from ai_health_board.providers.statuspage import StatuspageProvider
-from ai_health_board.screens.status_board import (
+from core.models import ServiceStatus
+from core.providers.statuspage import StatuspageProvider
+from core.screens.status_board import (
     StatusBoardScreen,
     CategoryData,
 )
@@ -22,10 +22,10 @@ from ui.assets import (
     _make_generic_icon,
 )
 from ui.layout import _STATUS_ICONS
-from ai_health_board.screens.status_board import _json_value_to_status
-from ai_health_board.screens.tamagotchi import TamagotchiScreen
-from ai_health_board.screens import create_screens
-from ai_health_board.config import (
+from core.screens.status_board import _json_value_to_status
+from core.screens.tamagotchi import TamagotchiScreen
+from core.screens import create_screens
+from core.config import (
     AppConfig,
     DisplayConfig,
     ScreenConfig,
@@ -804,7 +804,7 @@ def test_agent_feed_config_parsing():
 
 
 def test_agent_feed_screen_render():
-    from ai_health_board.screens.agent_feed import AgentFeedScreen
+    from core.screens.agent_feed import AgentFeedScreen
 
     sc = ScreenConfig(
         name="All Agents",
@@ -824,7 +824,7 @@ def test_agent_feed_screen_render():
 
 
 def test_agent_feed_screen_has_changed():
-    from ai_health_board.screens.agent_feed import AgentFeedScreen
+    from core.screens.agent_feed import AgentFeedScreen
 
     sc = ScreenConfig(
         name="All Agents",
@@ -853,13 +853,13 @@ def test_create_screens_agent_feed():
     )
     screens = create_screens(cfg)
     assert len(screens) == 1
-    from ai_health_board.screens.agent_feed import AgentFeedScreen
+    from core.screens.agent_feed import AgentFeedScreen
 
     assert isinstance(screens[0], AgentFeedScreen)
 
 
 def test_device_status_screen_render():
-    from ai_health_board.screens.device_status import DeviceStatusScreen
+    from core.screens.device_status import DeviceStatusScreen
 
     sc = ScreenConfig(name="Device", template="device_status")
     screen = DeviceStatusScreen(sc)
@@ -885,7 +885,7 @@ def test_device_status_screen_render():
 
 
 def test_device_status_screen_has_changed():
-    from ai_health_board.screens.device_status import DeviceStatusScreen
+    from core.screens.device_status import DeviceStatusScreen
 
     sc = ScreenConfig(name="Device", template="device_status")
     screen = DeviceStatusScreen(sc)
@@ -898,7 +898,7 @@ def test_device_status_screen_has_changed():
 
 
 def test_device_status_screen_defaults():
-    from ai_health_board.screens.device_status import DeviceStatusScreen
+    from core.screens.device_status import DeviceStatusScreen
 
     sc = ScreenConfig(name="Device", template="device_status")
     screen = DeviceStatusScreen(sc)
@@ -910,7 +910,7 @@ def test_device_status_screen_defaults():
 
 
 def test_device_status_helpers():
-    from ai_health_board.screens.device_status import (
+    from core.screens.device_status import (
         _read_file,
         _run_cmd,
         _get_cpu_temp,
@@ -945,7 +945,7 @@ def test_create_screens_device_status():
     )
     screens = create_screens(cfg)
     assert len(screens) == 1
-    from ai_health_board.screens.device_status import DeviceStatusScreen
+    from core.screens.device_status import DeviceStatusScreen
 
     assert isinstance(screens[0], DeviceStatusScreen)
 
