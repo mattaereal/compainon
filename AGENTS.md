@@ -84,6 +84,20 @@ Config is split across three files in `config/`:
 
 Loading merges all three. Each file is optional -- defaults are used for any missing file. The `python app.py init` wizard generates all three interactively.
 
+**Important:** Live config files (`*.yml`) are `.gitignore`d and not tracked in git. The repo only ships `.example` templates. To set up your local config:
+
+```bash
+# Option 1: copy examples manually
+cp config/display.yml.example config/display.yml
+cp config/tamagotchai.yml.example config/tamagotchai.yml
+cp config/screens.yml.example config/screens.yml
+
+# Option 2: run the interactive wizard
+python app.py init
+```
+
+This prevents `git pull` from overwriting your local settings.
+
 ### Screen Types
 
 Screens are defined in YAML config using a `type` that determines the data contract and processing logic. Each type delegates pixel rendering to a `layout` in `ui/layouts/`.

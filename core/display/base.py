@@ -58,6 +58,8 @@ class DisplayBackend(abc.ABC):
         Args:
             img: PIL Image in mode '1'.
             rotation: Degrees to rotate (0, 90, 180, 270).
+                Positive = counter-clockwise (PIL default).
+                Use 270 for 90 degrees clockwise / to the right.
 
         Returns:
             Rotated image or original if rotation is 0.

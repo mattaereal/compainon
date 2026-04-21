@@ -41,7 +41,7 @@ class Waveshare2in13DDisplay(DisplayBackend):
         self._full_refresh_every = _get_display_value(
             config, "full_refresh_every_n_updates", 50
         )
-        self._rotation = _get_display_value(config, "rotation", 90)
+        self._rotation = _get_display_value(config, "rotation", 270)
         self._init_display()
         if self._rotation and self._rotation % 360 != 0:
             self._width = self._epd.height

@@ -32,55 +32,55 @@ DISPLAY_PROFILES = {
     "waveshare_2in13_v1": {
         "width": 250,
         "height": 122,
-        "rotation": 90,
+        "rotation": 270,
         "description": 'Waveshare 2.13" V1 (B/W, landscape 250x122)',
     },
     "waveshare_2in13_v2": {
         "width": 250,
         "height": 122,
-        "rotation": 90,
+        "rotation": 270,
         "description": 'Waveshare 2.13" V2 (B/W, landscape 250x122)',
     },
     "waveshare_2in13_v3": {
         "width": 250,
         "height": 122,
-        "rotation": 90,
+        "rotation": 270,
         "description": 'Waveshare 2.13" V3 (B/W, landscape 250x122)',
     },
     "waveshare_2in13_v4": {
         "width": 250,
         "height": 122,
-        "rotation": 90,
+        "rotation": 270,
         "description": 'Waveshare 2.13" V4 (B/W, landscape 250x122, fast refresh)',
     },
     "waveshare_2in13bc": {
         "width": 212,
         "height": 104,
-        "rotation": 90,
+        "rotation": 270,
         "description": 'Waveshare 2.13" BC (B/W/R, landscape 212x104, no partial)',
     },
     "waveshare_2in13b_v3": {
         "width": 250,
         "height": 122,
-        "rotation": 90,
+        "rotation": 270,
         "description": 'Waveshare 2.13" B V3 (B/W/R, landscape 250x122, no partial)',
     },
     "waveshare_2in13b_v4": {
         "width": 250,
         "height": 122,
-        "rotation": 90,
+        "rotation": 270,
         "description": 'Waveshare 2.13" B V4 (B/W/R, landscape 250x122, no partial)',
     },
     "waveshare_2in13d": {
         "width": 212,
         "height": 104,
-        "rotation": 90,
+        "rotation": 270,
         "description": 'Waveshare 2.13" D (B/W, landscape 212x104, flexible)',
     },
     "waveshare_2in13g": {
         "width": 250,
         "height": 122,
-        "rotation": 90,
+        "rotation": 270,
         "description": 'Waveshare 2.13" G (4-color, landscape 250x122, no partial)',
     },
 }
@@ -355,10 +355,24 @@ class AppConfig:
         )
 
 
+def _warn_missing_config(config_dir: str, filename: str) -> None:
+    """Warn if a live config file is missing but its .example exists."""
+    live_path = os.path.join(config_dir, filename)
+    example_path = live_path + ".example"
+    if not os.path.exists(live_path) and os.path.exists(example_path):
+        logger.warning(
+            f"Config file missing: {live_path}. "
+            f"Copy from {example_path} to get started."
+        )
+
+
 def load_config(config_dir: str) -> AppConfig:
     """Load config from a directory containing display.yml, tamagotchai.yml, screens.yml."""
     if not os.path.isdir(config_dir):
         raise FileNotFoundError(f"Config directory not found: {config_dir}")
+
+    for cfg_file in (DISPLAY_CONFIG_FILE, APP_CONFIG_FILE, SCREENS_CONFIG_FILE):
+        _warn_missing_config(config_dir, cfg_file)
 
     display_raw = _load_yaml(os.path.join(config_dir, DISPLAY_CONFIG_FILE))
     app_raw = _load_yaml(os.path.join(config_dir, APP_CONFIG_FILE))

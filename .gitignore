@@ -7,3 +7,10 @@ cache/
 dist/
 build/
 .eggs/
+
+# User-local config files (copy from .example to create your own)
+config/*.yml
+!config/*.example
+
+# Local user files
+opencode.json
