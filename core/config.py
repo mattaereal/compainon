@@ -32,55 +32,46 @@ DISPLAY_PROFILES = {
     "waveshare_2in13_v1": {
         "width": 250,
         "height": 122,
-        "rotation": 270,
         "description": 'Waveshare 2.13" V1 (B/W, landscape 250x122)',
     },
     "waveshare_2in13_v2": {
         "width": 250,
         "height": 122,
-        "rotation": 270,
         "description": 'Waveshare 2.13" V2 (B/W, landscape 250x122)',
     },
     "waveshare_2in13_v3": {
         "width": 250,
         "height": 122,
-        "rotation": 270,
         "description": 'Waveshare 2.13" V3 (B/W, landscape 250x122)',
     },
     "waveshare_2in13_v4": {
         "width": 250,
         "height": 122,
-        "rotation": 270,
         "description": 'Waveshare 2.13" V4 (B/W, landscape 250x122, fast refresh)',
     },
     "waveshare_2in13bc": {
         "width": 212,
         "height": 104,
-        "rotation": 270,
         "description": 'Waveshare 2.13" BC (B/W/R, landscape 212x104, no partial)',
     },
     "waveshare_2in13b_v3": {
         "width": 250,
         "height": 122,
-        "rotation": 270,
         "description": 'Waveshare 2.13" B V3 (B/W/R, landscape 250x122, no partial)',
     },
     "waveshare_2in13b_v4": {
         "width": 250,
         "height": 122,
-        "rotation": 270,
         "description": 'Waveshare 2.13" B V4 (B/W/R, landscape 250x122, no partial)',
     },
     "waveshare_2in13d": {
         "width": 212,
         "height": 104,
-        "rotation": 270,
         "description": 'Waveshare 2.13" D (B/W, landscape 212x104, flexible)',
     },
     "waveshare_2in13g": {
         "width": 250,
         "height": 122,
-        "rotation": 270,
         "description": 'Waveshare 2.13" G (4-color, landscape 250x122, no partial)',
     },
 }
@@ -135,9 +126,8 @@ def _load_template_preset(template_name: str, config_dir: str) -> Dict[str, Any]
 @dataclass
 class DisplayConfig:
     backend: str
-    width: int = 122
-    height: int = 250
-    rotation: int = 0
+    width: int = 250
+    height: int = 122
     full_refresh_every_n_updates: int = 50
 
 
@@ -234,14 +224,11 @@ class AppConfig:
         if backend in DISPLAY_PROFILES and "width" not in display_raw:
             display_raw.setdefault("width", DISPLAY_PROFILES[backend]["width"])
             display_raw.setdefault("height", DISPLAY_PROFILES[backend]["height"])
-            if "rotation" in DISPLAY_PROFILES[backend] and "rotation" not in display_raw:
-                display_raw.setdefault("rotation", DISPLAY_PROFILES[backend]["rotation"])
 
         display = DisplayConfig(
             backend=backend,
             width=display_raw.get("width", 250),
             height=display_raw.get("height", 122),
-            rotation=display_raw.get("rotation", 0),
             full_refresh_every_n_updates=display_raw.get(
                 "full_refresh_every_n_updates", 50
             ),

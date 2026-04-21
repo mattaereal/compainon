@@ -37,19 +37,15 @@ class Waveshare2in13BCDisplay(DisplayBackend):
 
     def __init__(self, config: Union[DisplayConfig, Dict[str, Any]]):
         self._epd = None
-        self._rotation = _get_display_value(config, "rotation", 270)
         self._init_display()
-        if self._rotation and self._rotation % 360 != 0:
-            self._width = self._epd.height
-            self._height = self._epd.width
-        else:
-            self._width = self._epd.width
-            self._height = self._epd.height
+        # Logical landscape dimensions; driver handles rotation internally
+        self._width = 212
+        self._height = 104
         self._img: Image.Image = Image.new("1", (self._width, self._height), 255)
         self._draw = ImageDraw.Draw(self._img)
         logger.info(
             f"Waveshare backend initialized: logical {self._width}x{self._height} "
-            f"(physical {self._epd.width}x{self._epd.height}, rotation={self._rotation})"
+            f"(physical {self._epd.width}x{self._epd.height})"
         )
 
     def _init_display(self) -> None:

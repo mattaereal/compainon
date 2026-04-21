@@ -171,7 +171,7 @@ screens:
 
 ### Display Backends
 
-All 2.13" Waveshare variants are supported:
+All 2.13" Waveshare variants are supported. Modern Waveshare drivers (from https://github.com/waveshareteam/e-Paper) handle landscape-to-portrait rotation internally in `getbuffer()` — no manual rotation is needed.
 
 | Backend | Display | Logical Resolution | Partial refresh |
 |---|---|---|---|
@@ -186,7 +186,7 @@ All 2.13" Waveshare variants are supported:
 | `waveshare_2in13d` | D (B/W, flexible) | 212x104 | Yes |
 | `waveshare_2in13g` | G (4-color) | 250x122 | No |
 
-Width/height are auto-set from the backend profile in `DISPLAY_PROFILES` (defined in `config.py`).
+Logical width/height are auto-set from the backend profile in `DISPLAY_PROFILES` (defined in `config.py`). The driver rotates the landscape image to match the physical portrait panel internally.
 
 ### Key Files
 
@@ -285,7 +285,7 @@ Testing without PiSugar hardware: `kill -USR1 $(cat /tmp/tamagotchai.pid)` works
 ### Display Dimensions
 
 - All layouts render in **landscape** orientation: **250 x 122 pixels** (logical)
-- Physical Waveshare 2.13" panels are 122x250 portrait; the backend rotates by 90 degrees before sending to the driver
+- Physical Waveshare 2.13" panels are 122x250 portrait; the Waveshare driver rotates landscape images internally in `getbuffer()`
 - Waveshare 2.13" BC/D physical: 104x212 (logical landscape: 212x104)
 - Images are created in PIL mode `'1'` (1-bit black/white)
 - `fill=255` for white, `fill=0` for black

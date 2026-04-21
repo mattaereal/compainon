@@ -16,9 +16,8 @@ def test_load_valid_config():
         with open(os.path.join(td, "display.yml"), "w") as f:
             f.write(
                 "backend: mock\n"
-                "width: 122\n"
-                "height: 250\n"
-                "rotation: 0\n"
+                "width: 250\n"
+                "height: 122\n"
                 "full_refresh_every_n_updates: 3\n"
             )
         with open(os.path.join(td, "tamagotchai.yml"), "w") as f:

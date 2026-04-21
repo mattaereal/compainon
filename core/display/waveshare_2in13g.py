@@ -28,19 +28,15 @@ class Waveshare2in13GDisplay(DisplayBackend):
 
     def __init__(self, config: Union[DisplayConfig, Dict[str, Any]]):
         self._epd = None
-        self._rotation = _get_display_value(config, "rotation", 270)
         self._init_display()
-        if self._rotation and self._rotation % 360 != 0:
-            self._width = self._epd.height
-            self._height = self._epd.width
-        else:
-            self._width = self._epd.width
-            self._height = self._epd.height
+        # Logical landscape dimensions; driver handles rotation internally
+        self._width = 250
+        self._height = 122
         self._img: Image.Image = Image.new("1", (self._width, self._height), 255)
         self._draw = ImageDraw.Draw(self._img)
         logger.info(
             f"Waveshare backend initialized: logical {self._width}x{self._height} "
-            f"(physical {self._epd.width}x{self._epd.height}, rotation={self._rotation})"
+            f"(physical {self._epd.width}x{self._epd.height})"
         )
 
     def _init_display(self) -> None:
@@ -78,8 +74,7 @@ class Waveshare2in13GDisplay(DisplayBackend):
         if self._epd is None:
             return
         try:
-            img = self._maybe_rotate(img, self._rotation)
-        buf = self._epd.getbuffer(img)
+            buf = self._epd.getbuffer(img)
             self._epd.display(buf)
             time.sleep(2)
             logger.debug("EPD full refresh (4-color, B/W only)")
@@ -90,8 +85,7 @@ class Waveshare2in13GDisplay(DisplayBackend):
         if self._epd is None:
             return
         try:
-            img = self._maybe_rotate(self._img, self._rotation)
-            buf = self._epd.getbuffer(img)
+            buf = self._epd.getbuffer(self._img)
             self._epd.display(buf)
             time.sleep(2)
         except Exception as e:
